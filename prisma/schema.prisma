@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  password  String
+  avatar    String?
+  role      Role     @default(USER)
+  banned    Boolean  @default(false)
+  posts     Post[]
+  replies   Reply[]
+  favorites Favorite[]
+  createdAt DateTime @default(now())
+}
+
+model Post {
+  id         String   @id @default(cuid())
+  title      String
+  content    String   @db.Text
+  images     String[]
+  author     User     @relation(fields: [authorId], references: [id])
+  authorId   String
+  section    Section  @relation(fields: [sectionId], references: [id])
+  sectionId  String
+  tags       Tag[]
+  replies    Reply[]
+  favorites  Favorite[]
+  viewCount  Int      @default(0)
+  replyCount Int      @default(0)
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([sectionId])
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Reply {
+  id        String   @id @default(cuid())
+  content   String   @db.Text
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
+  post      Post     @relation(fields: [postId], references: [id])
+  postId    String
+  parent    Reply?   @relation("ReplyToReply", fields: [parentId], references: [id])
+  parentId  String?
+  children  Reply[]  @relation("ReplyToReply")
+  createdAt DateTime @default(now())
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+}
+
+model Section {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String?
+  icon        String?
+  order       Int    @default(0)
+  posts       Post[]
+}
+
+model Tag {
+  id    String @id @default(cuid())
+  name  String @unique
+  posts Post[]
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id])
+  postId    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
