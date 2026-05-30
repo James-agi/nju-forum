@@ -12,18 +12,49 @@ enum Role {
   ADMIN
 }
 
+enum SourceType {
+  OFFICIAL
+  DOCUMENT
+  SENIOR
+  AUTHOR_EXPERIENCE
+  OTHER
+}
+
+enum VerificationStatus {
+  VERIFIED
+  UNVERIFIED
+  NEEDS_REVIEW
+}
+
+enum QuestionStatus {
+  ANSWERED
+  GAP_RECORDED
+  OUT_OF_SCOPE
+}
+
+enum GapStatus {
+  OPEN
+  HANDLED
+  DUPLICATE
+  OUT_OF_SCOPE
+}
+
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String
-  avatar    String?
-  role      Role     @default(USER)
-  banned    Boolean  @default(false)
-  posts     Post[]
-  replies   Reply[]
-  favorites Favorite[]
-  createdAt DateTime @default(now())
+  id                    String              @id @default(cuid())
+  email                 String              @unique
+  name                  String
+  password              String
+  avatar                String?
+  role                  Role                @default(USER)
+  banned                Boolean             @default(false)
+  posts                 Post[]
+  replies               Reply[]
+  favorites             Favorite[]
+  knowledgeCardsCreated KnowledgeCard[]     @relation("KnowledgeCardCreatedBy")
+  knowledgeCardsUpdated KnowledgeCard[]     @relation("KnowledgeCardUpdatedBy")
+  knowledgeQuestions    KnowledgeQuestion[] @relation("KnowledgeQuestionAsker")
+  knowledgeGapsHandled  KnowledgeGap[]      @relation("KnowledgeGapHandledBy")
+  createdAt             DateTime            @default(now())
 }
 
 model Post {
@@ -91,4 +122,95 @@ model Favorite {
 
   @@unique([userId, postId])
   @@index([postId])
+}
+
+model KnowledgeCard {
+  id                 String             @id @default(cuid())
+  summary            String
+  body               String             @db.Text
+  sourceUrl          String?
+  sourceDescription  String
+  sourceType         SourceType
+  verificationStatus VerificationStatus
+  domainTag          String
+  createdBy          User               @relation("KnowledgeCardCreatedBy", fields: [createdById], references: [id])
+  createdById        String
+  updatedBy          User?              @relation("KnowledgeCardUpdatedBy", fields: [updatedById], references: [id])
+  updatedById        String?
+  citations          KnowledgeCitation[]
+  resolvedGaps       KnowledgeGap[]     @relation("KnowledgeGapLinkedCard")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  archivedAt         DateTime?
+
+  @@index([domainTag])
+  @@index([verificationStatus])
+  @@index([sourceType])
+  @@index([archivedAt])
+  @@index([createdById])
+}
+
+model KnowledgeQuestion {
+  id             String           @id @default(cuid())
+  asker          User             @relation("KnowledgeQuestionAsker", fields: [askerId], references: [id])
+  askerId        String
+  originalText   String           @db.Text
+  normalizedText String
+  status         QuestionStatus
+  answer         KnowledgeAnswer?
+  gap            KnowledgeGap?
+  createdAt      DateTime         @default(now())
+
+  @@index([askerId])
+  @@index([normalizedText])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model KnowledgeAnswer {
+  id         String              @id @default(cuid())
+  question   KnowledgeQuestion   @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionId String              @unique
+  answerText String              @db.Text
+  citations  KnowledgeCitation[]
+  createdAt  DateTime            @default(now())
+}
+
+model KnowledgeCitation {
+  id        String          @id @default(cuid())
+  answer    KnowledgeAnswer @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  answerId  String
+  card      KnowledgeCard   @relation(fields: [cardId], references: [id])
+  cardId    String
+  claimText String          @db.Text
+  createdAt DateTime        @default(now())
+
+  @@index([answerId])
+  @@index([cardId])
+}
+
+model KnowledgeGap {
+  id                 String             @id @default(cuid())
+  question           KnowledgeQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  questionId         String?            @unique
+  originalQuestion   String             @db.Text
+  normalizedQuestion String
+  status             GapStatus          @default(OPEN)
+  handledBy          User?              @relation("KnowledgeGapHandledBy", fields: [handledById], references: [id])
+  handledById        String?
+  handledAt          DateTime?
+  linkedCard         KnowledgeCard?     @relation("KnowledgeGapLinkedCard", fields: [linkedCardId], references: [id])
+  linkedCardId       String?
+  duplicateOf        KnowledgeGap?      @relation("KnowledgeGapDuplicate", fields: [duplicateOfId], references: [id])
+  duplicateOfId      String?
+  duplicates         KnowledgeGap[]     @relation("KnowledgeGapDuplicate")
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([normalizedQuestion])
+  @@index([status])
+  @@index([linkedCardId])
+  @@index([duplicateOfId])
+  @@index([handledById])
+  @@index([createdAt])
 }

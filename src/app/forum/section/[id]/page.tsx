@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MessageSquare, Eye, Clock, PenSquare } from "lucide-react";
+import { PostListItem } from "@/components/forum/post-list-item";
+import { ArrowLeft, MessageSquare, PenSquare } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -29,74 +30,94 @@ export default async function SectionPage({ params }: SectionPageProps) {
     },
   });
 
-  return (
-    <div className="container mx-auto max-w-4xl px-4 py-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">
-            {section.icon} {section.name}
-          </h1>
-          {section.description && (
-            <p className="text-sm text-muted-foreground mt-1">{section.description}</p>
-          )}
-        </div>
-        <Button asChild>
-          <Link href="/forum/new">
-            <PenSquare className="mr-2 h-4 w-4" />
-            发帖
-          </Link>
-        </Button>
-      </div>
+  const totalReplies = posts.reduce((sum, post) => sum + post._count.replies, 0);
 
-      <div className="space-y-3">
-        {posts.map((post) => (
-          <Link key={post.id} href={`/forum/post/${post.id}`}>
-            <Card className="transition-colors hover:bg-muted/50 cursor-pointer">
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {post.pinned && (
-                        <Badge variant="secondary" className="text-xs">置顶</Badge>
-                      )}
-                      {post.tags.map((tag) => (
-                        <Badge key={tag.id} variant="secondary" className="text-xs">
-                          {tag.name}
-                        </Badge>
-                      ))}
-                    </div>
-                    <h3 className="font-medium truncate">{post.title}</h3>
-                    <p className="text-sm text-muted-foreground truncate mt-1">
-                      {post.content.substring(0, 120)}...
-                    </p>
-                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                      <span>{post.author.name}</span>
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {new Date(post.createdAt).toLocaleDateString("zh-CN")}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Eye className="h-3 w-3" />
-                        {post.viewCount}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <MessageSquare className="h-3 w-3" />
-                        {post._count.replies}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-        {posts.length === 0 && (
+  return (
+    <div className="min-h-[calc(100vh-3.5rem)] bg-muted/20">
+      <div className="container mx-auto max-w-5xl px-4 py-6">
+        <div className="mb-6">
+          <Button asChild variant="ghost" size="sm" className="-ml-3">
+            <Link href="/forum">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              返回论坛
+            </Link>
+          </Button>
+        </div>
+
+        <div className="mb-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
           <Card>
-            <CardContent className="p-8 text-center text-muted-foreground">
-              该分区暂无帖子
+            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border bg-background text-3xl">
+                  {section.icon || "📌"}
+                </div>
+                <div>
+                  <Badge variant="outline" className="mb-2">
+                    论坛分区
+                  </Badge>
+                  <h1 className="text-2xl font-bold">{section.name}</h1>
+                  {section.description && (
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {section.description}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <Button asChild className="w-full sm:w-auto">
+                <Link href="/forum/new">
+                  <PenSquare className="mr-2 h-4 w-4" />
+                  发帖
+                </Link>
+              </Button>
             </CardContent>
           </Card>
-        )}
+
+          <Card>
+            <CardContent className="grid h-full grid-cols-2 gap-3 p-5 lg:grid-cols-1">
+              <div>
+                <p className="text-sm text-muted-foreground">帖子</p>
+                <p className="text-2xl font-semibold">{posts.length}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">回复</p>
+                <p className="flex items-center gap-2 text-2xl font-semibold">
+                  <MessageSquare className="h-5 w-5 text-muted-foreground" />
+                  {totalReplies}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <section className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">分区帖子</h2>
+            <span className="text-sm text-muted-foreground">置顶优先，最新在前</span>
+          </div>
+          <div className="space-y-3">
+            {posts.map((post) => (
+              <PostListItem key={post.id} post={post} showSection={false} />
+            ))}
+            {posts.length === 0 && (
+              <Card>
+                <CardContent className="p-4">
+                  <div className="flex flex-col items-center gap-3 py-8 text-center">
+                    <PenSquare className="h-8 w-8 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">该分区暂无帖子</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        在「{section.name}」发布第一条讨论。
+                      </p>
+                    </div>
+                    <Button asChild>
+                      <Link href="/forum/new">去发帖</Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );

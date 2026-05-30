@@ -1,38 +1,13 @@
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
+import { upsertDefaultForumSections } from "./default-sections";
 
 const prisma = new PrismaClient();
 
 async function main() {
   const password = await hash("123456", 12);
 
-  const sections = await Promise.all([
-    prisma.section.upsert({
-      where: { name: "学习" },
-      update: {},
-      create: { name: "学习", description: "学习交流、课程讨论、考试经验", icon: "📚", order: 1 },
-    }),
-    prisma.section.upsert({
-      where: { name: "生活" },
-      update: {},
-      create: { name: "生活", description: "校园生活、美食推荐、日常分享", icon: "🏫", order: 2 },
-    }),
-    prisma.section.upsert({
-      where: { name: "二手" },
-      update: {},
-      create: { name: "二手", description: "闲置物品交易、求购信息", icon: "🛒", order: 3 },
-    }),
-    prisma.section.upsert({
-      where: { name: "求助" },
-      update: {},
-      create: { name: "求助", description: "问题求助、经验咨询", icon: "🆘", order: 4 },
-    }),
-    prisma.section.upsert({
-      where: { name: "吐槽" },
-      update: {},
-      create: { name: "吐槽", description: "校园吐槽、自由讨论", icon: "💬", order: 5 },
-    }),
-  ]);
+  const sections = await upsertDefaultForumSections(prisma);
 
   const user1 = await prisma.user.upsert({
     where: { email: "test1@nju.edu.cn" },

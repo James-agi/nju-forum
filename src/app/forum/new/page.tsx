@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -8,13 +9,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { PenSquare } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, PenSquare } from "lucide-react";
 
 interface Section {
   id: string;
   name: string;
   icon: string | null;
+  description: string | null;
 }
 
 export default function NewPostPage() {
@@ -84,76 +92,115 @@ export default function NewPostPage() {
   }
 
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <PenSquare className="h-5 w-5" />
-            发帖
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && (
-              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                {error}
-              </div>
-            )}
-            <div className="space-y-2">
-              <Label>分区</Label>
-              <Select
-                value={form.sectionId}
-                onValueChange={(value) => setForm({ ...form, sectionId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="选择分区" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sections.map((section) => (
-                    <SelectItem key={section.id} value={section.id}>
-                      {section.icon} {section.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+    <div className="min-h-[calc(100vh-3.5rem)] bg-muted/20">
+      <div className="container mx-auto max-w-5xl px-4 py-6">
+        <div className="mb-6">
+          <Button asChild variant="ghost" size="sm" className="-ml-3">
+            <Link href="/forum">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              返回论坛
+            </Link>
+          </Button>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PenSquare className="h-5 w-5" />
+                发布帖子
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>分区</Label>
+                  <Select
+                    value={form.sectionId}
+                    onValueChange={(value) => setForm({ ...form, sectionId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择分区" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sections.map((section) => (
+                        <SelectItem key={section.id} value={section.id}>
+                          {section.icon} {section.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="title">标题</Label>
+                  <Input
+                    id="title"
+                    placeholder="帖子标题（最多100字）"
+                    value={form.title}
+                    onChange={(e) => setForm({ ...form, title: e.target.value })}
+                    maxLength={100}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="content">内容</Label>
+                  <Textarea
+                    id="content"
+                    placeholder="写下你想说的..."
+                    value={form.content}
+                    onChange={(e) => setForm({ ...form, content: e.target.value })}
+                    rows={10}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tags">标签（可选，逗号分隔）</Label>
+                  <Input
+                    id="tags"
+                    placeholder="例如：求助, 急, 置顶"
+                    value={form.tags}
+                    onChange={(e) => setForm({ ...form, tags: e.target.value })}
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={loading}>
+                  {loading ? "发布中..." : "发布帖子"}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-3">
+            <h2 className="text-sm font-medium text-muted-foreground">可选分区</h2>
+            <div className="grid gap-2">
+              {sections.map((section) => (
+                <button
+                  key={section.id}
+                  type="button"
+                  onClick={() => setForm((current) => ({ ...current, sectionId: section.id }))}
+                  className={`rounded-md border bg-background p-3 text-left transition-colors hover:border-foreground/20 ${
+                    form.sectionId === section.id ? "border-foreground" : "border-border"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-medium">
+                    <span>{section.icon || "📌"}</span>
+                    <span>{section.name}</span>
+                  </div>
+                  {section.description && (
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                      {section.description}
+                    </p>
+                  )}
+                </button>
+              ))}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="title">标题</Label>
-              <Input
-                id="title"
-                placeholder="帖子标题（最多100字）"
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                maxLength={100}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="content">内容</Label>
-              <Textarea
-                id="content"
-                placeholder="写下你想说的..."
-                value={form.content}
-                onChange={(e) => setForm({ ...form, content: e.target.value })}
-                rows={10}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="tags">标签（可选，逗号分隔）</Label>
-              <Input
-                id="tags"
-                placeholder="例如：求助, 急, 置顶"
-                value={form.tags}
-                onChange={(e) => setForm({ ...form, tags: e.target.value })}
-              />
-            </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "发布中..." : "发布帖子"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
