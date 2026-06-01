@@ -121,9 +121,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "来源类型无效" }, { status: 400 });
     }
 
+    // 铁律：AI 起草的卡片不允许自己标 VERIFIED，强制压回 NEEDS_REVIEW，只有作者人工编辑才能升级
+    const draftedByAi = (payload as { draftedByAi?: unknown })?.draftedByAi === true;
+    const verificationStatus = draftedByAi
+      ? "NEEDS_REVIEW"
+      : parsed.data.verificationStatus;
+
     const card = await db.knowledgeCard.create({
       data: {
         ...parsed.data,
+        verificationStatus,
         sourceUrl: parsed.data.sourceUrl ?? null,
         createdById: authz.user.id,
       },

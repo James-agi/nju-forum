@@ -37,7 +37,7 @@ const emptyForm = {
   sourceUrl: "",
   sourceDescription: "",
   sourceType: "OFFICIAL" as SourceTypeValue,
-  verificationStatus: "VERIFIED" as VerificationStatusValue,
+  verificationStatus: "NEEDS_REVIEW" as VerificationStatusValue,
   domainTag: "新生入学",
 };
 
