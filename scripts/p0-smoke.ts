@@ -46,6 +46,7 @@ async function main() {
     id: "strong-card",
     summary: "三三制修读规则",
     body: "三三制课程需要按模块完成修读要求。",
+    sourceExcerpt: null,
     sourceUrl: null,
     sourceDescription: "官方说明",
     sourceType: "OFFICIAL",

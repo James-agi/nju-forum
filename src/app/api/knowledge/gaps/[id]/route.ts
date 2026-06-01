@@ -59,18 +59,32 @@ export async function PATCH(
       }
     }
 
-    const handledAt = new Date();
+    const data: {
+      gapType?: (typeof parsed.data)["gapType"];
+      status?: (typeof parsed.data)["status"];
+      handledById?: string;
+      handledAt?: Date;
+      linkedCardId?: string | null;
+      duplicateOfId?: string | null;
+    } = {};
+
+    if (parsed.data.gapType !== undefined) {
+      data.gapType = parsed.data.gapType;
+    }
+
+    if (parsed.data.status !== undefined) {
+      data.status = parsed.data.status;
+      data.handledById = authz.user.id;
+      data.handledAt = new Date();
+      data.linkedCardId =
+        parsed.data.status === "HANDLED" ? parsed.data.linkedCardId : null;
+      data.duplicateOfId =
+        parsed.data.status === "DUPLICATE" ? parsed.data.duplicateOfId : null;
+    }
+
     const gap = await db.knowledgeGap.update({
       where: { id: params.id },
-      data: {
-        status: parsed.data.status,
-        handledById: authz.user.id,
-        handledAt,
-        linkedCardId:
-          parsed.data.status === "HANDLED" ? parsed.data.linkedCardId : null,
-        duplicateOfId:
-          parsed.data.status === "DUPLICATE" ? parsed.data.duplicateOfId : null,
-      },
+      data,
       include: {
         linkedCard: { select: { summary: true } },
       },
@@ -80,6 +94,7 @@ export async function PATCH(
       id: gap.id,
       originalQuestion: gap.originalQuestion,
       status: gap.status,
+      gapType: gap.gapType,
       linkedCardId: gap.linkedCardId,
       linkedCardSummary: gap.linkedCard?.summary ?? null,
       duplicateOfId: gap.duplicateOfId,

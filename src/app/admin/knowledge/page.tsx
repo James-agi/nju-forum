@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, Search, X } from "lucide-react";
+import { ArrowLeft, MessageSquareWarning, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -107,6 +107,12 @@ export default function AdminKnowledgePage() {
               录入稳定的新生入学知识，并保留来源与核实状态。
             </p>
           </div>
+          <Button asChild variant="outline" size="sm" className="ml-auto">
+            <Link href="/admin/knowledge/feedback">
+              <MessageSquareWarning className="mr-2 h-4 w-4" />
+              没解决反馈
+            </Link>
+          </Button>
         </div>
 
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_180px_auto_auto]">

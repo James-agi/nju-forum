@@ -4,7 +4,6 @@ import { useState } from "react";
 import { Ban, CheckCircle2, Copy, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -22,7 +21,10 @@ import {
 } from "@/components/ui/table";
 import {
   GAP_STATUS_LABELS,
+  GAP_TYPE_LABELS,
+  GAP_TYPES,
   type GapStatusValue,
+  type GapTypeValue,
   type KnowledgeCardDTO,
   type KnowledgeGapDTO,
 } from "@/lib/knowledge/types";
@@ -34,6 +36,15 @@ interface GapListProps {
   loading?: boolean;
   onStatusFilterChange: (status: GapStatusValue | "ALL") => void;
   onRefresh: () => void;
+}
+
+function getDuplicateQuestionText(gaps: KnowledgeGapDTO[], duplicateOfId: string | null) {
+  if (!duplicateOfId) return null;
+  return gaps.find((gap) => gap.id === duplicateOfId)?.originalQuestion ?? duplicateOfId;
+}
+
+function getSelectQuestionLabel(question: string) {
+  return question.length > 40 ? `${question.slice(0, 40)}...` : question;
 }
 
 export function GapList({
@@ -80,6 +91,28 @@ export function GapList({
     }
   };
 
+  const updateGapType = async (gap: KnowledgeGapDTO, gapType: GapTypeValue) => {
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/knowledge/gaps/${gap.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ gapType }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "更新类型失败");
+        return;
+      }
+
+      onRefresh();
+    } catch {
+      setError("更新类型失败");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -109,6 +142,7 @@ export function GapList({
             <TableRow>
               <TableHead>问题</TableHead>
               <TableHead>状态</TableHead>
+              <TableHead>类型</TableHead>
               <TableHead>关联卡片</TableHead>
               <TableHead className="text-right">操作</TableHead>
             </TableRow>
@@ -126,6 +160,23 @@ export function GapList({
                   <Badge variant={gap.status === "OPEN" ? "secondary" : "outline"}>
                     {GAP_STATUS_LABELS[gap.status]}
                   </Badge>
+                </TableCell>
+                <TableCell className="min-w-32">
+                  <Select
+                    value={gap.gapType}
+                    onValueChange={(value) => updateGapType(gap, value as GapTypeValue)}
+                  >
+                    <SelectTrigger className="h-8 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {GAP_TYPES.map((type) => (
+                        <SelectItem key={type} value={type}>
+                          {GAP_TYPE_LABELS[type]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell className="min-w-64">
                   {gap.linkedCardSummary ? (
@@ -151,7 +202,7 @@ export function GapList({
                   )}
                   {gap.duplicateOfId && (
                     <p className="mt-2 text-xs text-muted-foreground">
-                      重复于 {gap.duplicateOfId}
+                      重复于：{getDuplicateQuestionText(gaps, gap.duplicateOfId)}
                     </p>
                   )}
                 </TableCell>
@@ -177,27 +228,40 @@ export function GapList({
                         </Button>
                       </div>
                       <div className="flex w-full max-w-sm gap-2">
-                        <Input
+                        <Select
                           value={duplicateByGap[gap.id] || ""}
-                          onChange={(event) =>
+                          onValueChange={(value) =>
                             setDuplicateByGap((current) => ({
                               ...current,
-                              [gap.id]: event.target.value,
+                              [gap.id]: value,
                             }))
                           }
-                          placeholder="重复缺口 ID"
-                        />
+                        >
+                          <SelectTrigger className="min-w-0 flex-1 text-left">
+                            <SelectValue placeholder="选择重复来源" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {gaps
+                              .filter((candidate) => candidate.id !== gap.id)
+                              .map((candidate) => (
+                                <SelectItem key={candidate.id} value={candidate.id}>
+                                  {getSelectQuestionLabel(candidate.originalQuestion)}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => updateGap(gap, "DUPLICATE")}
                         >
-                          <Copy className="h-4 w-4" />
+                          <Copy className="mr-2 h-4 w-4" />
+                          标记重复
                         </Button>
                       </div>
                     </div>
                   ) : (
-                    <span className="text-sm text-muted-foreground">已归档处理</span>
+                    <GapResult gap={gap} gaps={gaps} />
                   )}
                 </TableCell>
               </TableRow>
@@ -217,4 +281,34 @@ export function GapList({
       </div>
     </div>
   );
+}
+
+function GapResult({
+  gap,
+  gaps,
+}: {
+  gap: KnowledgeGapDTO;
+  gaps: KnowledgeGapDTO[];
+}) {
+  if (gap.status === "HANDLED") {
+    return (
+      <span className="text-sm text-muted-foreground">
+        已补为：<span className="text-foreground">《{gap.linkedCardSummary ?? "关联卡片"}》</span>
+      </span>
+    );
+  }
+
+  if (gap.status === "DUPLICATE") {
+    return (
+      <span className="text-sm text-muted-foreground">
+        重复于：<span className="text-foreground">{getDuplicateQuestionText(gaps, gap.duplicateOfId)}</span>
+      </span>
+    );
+  }
+
+  if (gap.status === "OUT_OF_SCOPE") {
+    return <span className="text-sm text-muted-foreground">已标记不属 P0</span>;
+  }
+
+  return null;
 }

@@ -12,6 +12,7 @@
     "db:migrate": "npx prisma migrate dev",
     "db:seed": "npx tsx prisma/seed.ts",
     "db:seed:sections": "npx tsx prisma/seed-sections.ts",
+    "db:seed:knowledge": "npx tsx prisma/seed-knowledge.ts",
     "db:studio": "npx prisma studio",
     "smoke:p0": "npx tsx scripts/p0-smoke.ts"
   },

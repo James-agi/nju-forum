@@ -7,6 +7,7 @@ export type RetrievalCard = Pick<
   | "id"
   | "summary"
   | "body"
+  | "sourceExcerpt"
   | "sourceUrl"
   | "sourceDescription"
   | "sourceType"
@@ -263,6 +264,7 @@ export async function retrieveKnowledgeCards(question: string, limit = 5) {
       id: true,
       summary: true,
       body: true,
+      sourceExcerpt: true,
       sourceUrl: true,
       sourceDescription: true,
       sourceType: true,

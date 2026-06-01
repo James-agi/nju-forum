@@ -139,6 +139,16 @@ export function CardList({ cards, loading, onEdit, onArchive }: CardListProps) {
 
                     {expanded && (
                       <div className="space-y-3 border-t pt-3">
+                        {card.sourceExcerpt && (
+                          <div className="rounded-md bg-muted/50 p-3">
+                            <p className="mb-1 text-xs font-medium text-muted-foreground">
+                              来源原文摘录
+                            </p>
+                            <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
+                              {card.sourceExcerpt}
+                            </p>
+                          </div>
+                        )}
                         <div className="flex flex-col gap-2 text-sm md:flex-row md:items-center md:justify-between">
                           <span className="text-muted-foreground">
                             {card.sourceDescription}

@@ -145,6 +145,8 @@ export async function POST(req: Request) {
     const citationResponse: CitationDTO[] = citations.map((citation) => ({
       cardId: citation.card.id,
       summary: citation.card.summary,
+      body: citation.card.body,
+      sourceExcerpt: citation.card.sourceExcerpt,
       sourceDescription: citation.card.sourceDescription,
       sourceUrl: citation.card.sourceUrl,
       sourceType: citation.card.sourceType,

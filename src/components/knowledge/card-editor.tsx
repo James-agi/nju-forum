@@ -33,6 +33,7 @@ interface CardEditorProps {
 const emptyForm = {
   summary: "",
   body: "",
+  sourceExcerpt: "",
   sourceUrl: "",
   sourceDescription: "",
   sourceType: "OFFICIAL" as SourceTypeValue,
@@ -59,6 +60,7 @@ export function CardEditor({ card, onSaved }: CardEditorProps) {
       setForm({
         summary: card.summary,
         body: card.body,
+        sourceExcerpt: card.sourceExcerpt ?? "",
         sourceUrl: card.sourceUrl ?? "",
         sourceDescription: card.sourceDescription,
         sourceType: card.sourceType,
@@ -129,6 +131,17 @@ export function CardEditor({ card, onSaved }: CardEditorProps) {
               onChange={(event) => updateField("body", event.target.value)}
               className="min-h-36"
               placeholder="只写一个独立知识点，保留可用于回答的完整内容"
+            />
+          </div>
+
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="sourceExcerpt">原文摘录（可空，仅展示用，不参与问答检索）</Label>
+            <Textarea
+              id="sourceExcerpt"
+              value={form.sourceExcerpt}
+              onChange={(event) => updateField("sourceExcerpt", event.target.value)}
+              className="min-h-28"
+              placeholder="逐字粘贴来源原文片段，供用户核对溯源；留空则不显示原文板块"
             />
           </div>
 

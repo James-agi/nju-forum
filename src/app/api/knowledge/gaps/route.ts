@@ -5,6 +5,7 @@ import { getPagination } from "@/lib/knowledge/validation";
 import {
   GAP_STATUSES,
   type GapStatusValue,
+  type GapTypeValue,
   type KnowledgeGapDTO,
 } from "@/lib/knowledge/types";
 
@@ -21,6 +22,7 @@ function toGapDTO(gap: {
   id: string;
   originalQuestion: string;
   status: GapStatusValue;
+  gapType: GapTypeValue;
   linkedCardId: string | null;
   linkedCard: { summary: string } | null;
   duplicateOfId: string | null;
@@ -31,6 +33,7 @@ function toGapDTO(gap: {
     id: gap.id,
     originalQuestion: gap.originalQuestion,
     status: gap.status,
+    gapType: gap.gapType,
     linkedCardId: gap.linkedCardId,
     linkedCardSummary: gap.linkedCard?.summary ?? null,
     duplicateOfId: gap.duplicateOfId,

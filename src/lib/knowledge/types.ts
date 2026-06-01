@@ -25,6 +25,13 @@ export const GAP_STATUSES = [
   "OUT_OF_SCOPE",
 ] as const;
 
+export const GAP_TYPES = [
+  "CONTENT",
+  "DATA",
+  "ACTION",
+  "POLICY_UNCLEAR",
+] as const;
+
 export const KNOWLEDGE_DOMAIN_TAGS = [
   "新生入学",
   "三三制",
@@ -40,6 +47,7 @@ export type SourceTypeValue = (typeof SOURCE_TYPES)[number];
 export type VerificationStatusValue = (typeof VERIFICATION_STATUSES)[number];
 export type QuestionStatusValue = (typeof QUESTION_STATUSES)[number];
 export type GapStatusValue = (typeof GAP_STATUSES)[number];
+export type GapTypeValue = (typeof GAP_TYPES)[number];
 
 export const SOURCE_TYPE_LABELS: Record<SourceTypeValue, string> = {
   OFFICIAL: "官方来源",
@@ -62,6 +70,13 @@ export const GAP_STATUS_LABELS: Record<GapStatusValue, string> = {
   OUT_OF_SCOPE: "不属 P0",
 };
 
+export const GAP_TYPE_LABELS: Record<GapTypeValue, string> = {
+  CONTENT: "缺内容",
+  DATA: "缺数据",
+  ACTION: "缺动作",
+  POLICY_UNCLEAR: "政策不明",
+};
+
 export interface Pagination {
   page: number;
   limit: number;
@@ -73,6 +88,7 @@ export interface KnowledgeCardDTO {
   id: string;
   summary: string;
   body: string;
+  sourceExcerpt: string | null;
   sourceUrl: string | null;
   sourceDescription: string;
   sourceType: SourceTypeValue;
@@ -85,6 +101,8 @@ export interface KnowledgeCardDTO {
 export interface CitationDTO {
   cardId: string;
   summary: string;
+  body: string;
+  sourceExcerpt: string | null;
   sourceDescription: string;
   sourceUrl: string | null;
   sourceType: SourceTypeValue;
@@ -96,6 +114,7 @@ export interface KnowledgeGapDTO {
   id: string;
   originalQuestion: string;
   status: GapStatusValue;
+  gapType: GapTypeValue;
   linkedCardId: string | null;
   linkedCardSummary: string | null;
   duplicateOfId: string | null;

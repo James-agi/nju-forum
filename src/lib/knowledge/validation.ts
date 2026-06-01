@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  GAP_TYPES,
   SOURCE_TYPES,
   VERIFICATION_STATUSES,
 } from "@/lib/knowledge/types";
@@ -31,9 +32,17 @@ const optionalId = z.preprocess(
 
 const GAP_UPDATE_STATUSES = ["HANDLED", "DUPLICATE", "OUT_OF_SCOPE"] as const;
 
+const optionalText = (name: string, max = 12000) =>
+  z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().max(max, `${name}过长`).optional());
+
 export const cardCreateSchema = z.object({
   summary: trimmedRequired("摘要", 200),
   body: trimmedRequired("正文", 12000),
+  sourceExcerpt: optionalText("原文摘录", 12000),
   sourceUrl: optionalUrl,
   sourceDescription: trimmedRequired("来源说明", 500),
   sourceType: z.enum(SOURCE_TYPES),
@@ -51,11 +60,20 @@ export const askRequestSchema = z.object({
 
 export const gapUpdateSchema = z
   .object({
-    status: z.enum(GAP_UPDATE_STATUSES),
+    status: z.enum(GAP_UPDATE_STATUSES).optional(),
+    gapType: z.enum(GAP_TYPES).optional(),
     linkedCardId: optionalId,
     duplicateOfId: optionalId,
   })
   .superRefine((value, ctx) => {
+    if (value.status === undefined && value.gapType === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["status"],
+        message: "至少需要更新状态或类型之一",
+      });
+    }
+
     if (value.status === "HANDLED" && !value.linkedCardId) {
       ctx.addIssue({
         code: "custom",

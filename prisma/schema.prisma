@@ -39,6 +39,13 @@ enum GapStatus {
   OUT_OF_SCOPE
 }
 
+enum GapType {
+  CONTENT
+  DATA
+  ACTION
+  POLICY_UNCLEAR
+}
+
 model User {
   id                    String              @id @default(cuid())
   email                 String              @unique
@@ -54,6 +61,7 @@ model User {
   knowledgeCardsUpdated KnowledgeCard[]     @relation("KnowledgeCardUpdatedBy")
   knowledgeQuestions    KnowledgeQuestion[] @relation("KnowledgeQuestionAsker")
   knowledgeGapsHandled  KnowledgeGap[]      @relation("KnowledgeGapHandledBy")
+  knowledgeAnswerFeedbacks KnowledgeAnswerFeedback[] @relation("KnowledgeAnswerFeedbackUser")
   createdAt             DateTime            @default(now())
 }
 
@@ -128,6 +136,7 @@ model KnowledgeCard {
   id                 String             @id @default(cuid())
   summary            String
   body               String             @db.Text
+  sourceExcerpt      String?            @db.Text
   sourceUrl          String?
   sourceDescription  String
   sourceType         SourceType
@@ -159,6 +168,7 @@ model KnowledgeQuestion {
   status         QuestionStatus
   answer         KnowledgeAnswer?
   gap            KnowledgeGap?
+  feedbacks      KnowledgeAnswerFeedback[] @relation("KnowledgeAnswerFeedbackQuestion")
   createdAt      DateTime         @default(now())
 
   @@index([askerId])
@@ -189,12 +199,28 @@ model KnowledgeCitation {
   @@index([cardId])
 }
 
+model KnowledgeAnswerFeedback {
+  id         String            @id @default(cuid())
+  question   KnowledgeQuestion @relation("KnowledgeAnswerFeedbackQuestion", fields: [questionId], references: [id], onDelete: Cascade)
+  questionId String
+  user       User              @relation("KnowledgeAnswerFeedbackUser", fields: [userId], references: [id])
+  userId     String
+  note       String?           @db.Text
+  createdAt  DateTime          @default(now())
+
+  @@unique([questionId, userId])
+  @@index([questionId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
 model KnowledgeGap {
   id                 String             @id @default(cuid())
   question           KnowledgeQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
   questionId         String?            @unique
   originalQuestion   String             @db.Text
   normalizedQuestion String
+  gapType            GapType            @default(CONTENT)
   status             GapStatus          @default(OPEN)
   handledBy          User?              @relation("KnowledgeGapHandledBy", fields: [handledById], references: [id])
   handledById        String?
@@ -209,6 +235,7 @@ model KnowledgeGap {
 
   @@index([normalizedQuestion])
   @@index([status])
+  @@index([gapType])
   @@index([linkedCardId])
   @@index([duplicateOfId])
   @@index([handledById])

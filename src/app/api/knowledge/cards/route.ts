@@ -19,6 +19,7 @@ function toCardDTO(card: {
   id: string;
   summary: string;
   body: string;
+  sourceExcerpt: string | null;
   sourceUrl: string | null;
   sourceDescription: string;
   sourceType: KnowledgeCardDTO["sourceType"];
@@ -31,6 +32,7 @@ function toCardDTO(card: {
     id: card.id,
     summary: card.summary,
     body: card.body,
+    sourceExcerpt: card.sourceExcerpt,
     sourceUrl: card.sourceUrl,
     sourceDescription: card.sourceDescription,
     sourceType: card.sourceType,

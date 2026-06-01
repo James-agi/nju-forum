@@ -38,3 +38,10 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# codex runner logs
+.codex-run/
+
+# 个人材料，与项目无关
+innovative_project_form.md
+innovative_project_form.txt
