@@ -42,6 +42,25 @@ next-env.d.ts
 # codex runner logs
 .codex-run/
 
+# local card batch secrets
+agent-workflows/card-batch/*.local.json
+
 # 个人材料，与项目无关
 innovative_project_form.md
 innovative_project_form.txt
+
+# 临时调试脚本与产物
+temp-*
+tmp-*
+query-cards.js
+*-diff.txt
+/backup_*.sql
+postgresql-install.log
+
+# 批次运行产物（脚本本身保留，仅忽略 runs 输出）
+agent-workflows/card-batch/runs/
+
+# node -e 误产生的乱名空文件（箭头函数 => 被 bash 当重定向符）
+*disconnect())
+*console.log*
+*includes(*
