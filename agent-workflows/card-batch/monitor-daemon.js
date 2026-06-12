@@ -43,20 +43,29 @@ function getBatchInfo(dir) {
     // CLI runner doesn't write web-run-status.json — infer status from job directories
     if (!status) {
       const jobsDir = path.join(root, "jobs");
-      const hasAnyOutput = fs.existsSync(jobsDir) && fs.readdirSync(jobsDir).some(d => {
-        const jp = path.join(jobsDir, d);
-        return fs.statSync(jp).isDirectory() && fs.readdirSync(jp).some(f => f.startsWith("transcript"));
-      });
-      const jobStatuses = (batch.jobs || []).map(j => j.status);
-      const allDone = jobStatuses.every(s => s === "EXPORTED");
-      const anyFailed = jobStatuses.some(s => s === "FAILED");
+      const allDone = (batch.jobs || []).every(j => j.status === "EXPORTED" || j.closed);
+      const anyFailed = (batch.jobs || []).some(j => j.status === "FAILED" && !j.closed);
+
+      // Check if all jobs have completed S3 (compare-source transcript exists)
+      let allS3Done = false;
+      if (fs.existsSync(jobsDir)) {
+        const dirs = fs.readdirSync(jobsDir).filter(d => {
+          const jp = path.join(jobsDir, d);
+          return fs.statSync(jp).isDirectory();
+        });
+        allS3Done = dirs.length > 0 && dirs.every(d => {
+          const jp = path.join(jobsDir, d);
+          return fs.readdirSync(jp).some(f => f.startsWith("transcript") && f.includes("compare"));
+        });
+      }
 
       if (batch.error || batch.ended) {
         status = { status: allDone ? "DONE" : "FAILED", error: batch.error };
       } else if (allDone) {
         status = { status: "DONE" };
-      } else if (hasAnyOutput) {
-        status = { status: "RUNNING" };
+      } else if (allS3Done) {
+        // All jobs finished S3 — batch is DONE even if some jobs failed
+        status = { status: "DONE" };
       } else if (anyFailed) {
         status = { status: "FAILED" };
       }
