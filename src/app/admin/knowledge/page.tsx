@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, MessageSquareWarning, Search, X } from "lucide-react";
+import { ArrowLeft, MessageSquareWarning, Search, Workflow, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -78,13 +78,31 @@ export default function AdminKnowledgePage() {
   const archiveCard = async (card: KnowledgeCardDTO) => {
     if (!window.confirm(`确认归档「${card.summary}」吗？`)) return;
 
-    await fetch(`/api/knowledge/cards/${card.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ archive: true }),
-    });
-    if (editingCard?.id === card.id) setEditingCard(null);
-    fetchCards();
+    try {
+      const res = await fetch(`/api/knowledge/cards/${card.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archive: true }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as Record<string, unknown>));
+        setError((data as { error?: string }).error || "归档失败");
+        return;
+      }
+      if (editingCard?.id === card.id) setEditingCard(null);
+      fetchCards();
+    } catch {
+      setError("归档失败，请稍后重试");
+    }
+  };
+
+  const updateCardInList = (updatedCard: KnowledgeCardDTO) => {
+    setCards((current) =>
+      current.map((card) => (card.id === updatedCard.id ? updatedCard : card))
+    );
+    setEditingCard((current) =>
+      current?.id === updatedCard.id ? updatedCard : current
+    );
   };
 
   if (status === "loading") {
@@ -107,12 +125,20 @@ export default function AdminKnowledgePage() {
               录入稳定的新生入学知识，并保留来源与核实状态。
             </p>
           </div>
-          <Button asChild variant="outline" size="sm" className="ml-auto">
-            <Link href="/admin/knowledge/feedback">
-              <MessageSquareWarning className="mr-2 h-4 w-4" />
-              没解决反馈
-            </Link>
-          </Button>
+          <div className="ml-auto flex gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/knowledge/batch">
+                <Workflow className="mr-2 h-4 w-4" />
+                批量制卡
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/admin/knowledge/feedback">
+                <MessageSquareWarning className="mr-2 h-4 w-4" />
+                没解决反馈
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_180px_auto_auto]">
@@ -189,6 +215,7 @@ export default function AdminKnowledgePage() {
             loading={loading}
             onEdit={setEditingCard}
             onArchive={archiveCard}
+            onUpdated={updateCardInList}
           />
         </div>
       </div>

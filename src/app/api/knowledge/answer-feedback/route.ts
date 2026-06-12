@@ -11,9 +11,8 @@ export async function POST(req: Request) {
 
     const payload = await req.json();
     const questionId = typeof payload?.questionId === "string" ? payload.questionId.trim() : "";
-    const trimmedNote =
-      typeof payload?.note === "string" ? payload.note.trim().slice(0, 2000) : null;
-    const note = trimmedNote ? trimmedNote : null;
+    const hasNote = typeof payload?.note === "string";
+    const note = hasNote ? payload.note.trim().slice(0, 2000) || null : undefined;
     if (!questionId) {
       return NextResponse.json({ error: "缺少 questionId" }, { status: 400 });
     }
@@ -37,9 +36,12 @@ export async function POST(req: Request) {
       create: {
         questionId,
         userId: authz.user.id,
-        note,
+        note: note ?? null,
       },
-      update: { note },
+      update: {
+        archivedAt: null,
+        ...(note !== undefined ? { note } : {}),
+      },
     });
 
     return NextResponse.json({ ok: true });

@@ -42,6 +42,22 @@ export async function PATCH(
       if (!linkedCard) {
         return NextResponse.json({ error: "关联卡片不存在或已归档" }, { status: 400 });
       }
+
+      const conflictGap = await db.knowledgeGap.findFirst({
+        where: {
+          linkedCardId: parsed.data.linkedCardId,
+          status: "HANDLED",
+          id: { not: params.id },
+        },
+        select: { id: true },
+      });
+
+      if (conflictGap) {
+        return NextResponse.json(
+          { error: "该卡片已被其他缺口关联" },
+          { status: 409 }
+        );
+      }
     }
 
     if (parsed.data.status === "DUPLICATE") {

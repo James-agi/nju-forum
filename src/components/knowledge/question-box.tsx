@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { LinkifiedText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
 import {
   SOURCE_TYPE_LABELS,
   VERIFICATION_STATUS_LABELS,
@@ -106,7 +107,9 @@ export function QuestionBox() {
             <CardTitle className="text-lg">回答</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <p className="whitespace-pre-wrap text-sm leading-7">{answer.answer}</p>
+            <p className="whitespace-pre-wrap break-words text-sm leading-7">
+              <LinkifiedText text={answer.answer} />
+            </p>
             <div className="space-y-3">
               <h2 className="text-sm font-medium">引用来源</h2>
               <CitationList citations={answer.citations} />
@@ -152,24 +155,49 @@ function CitationList({ citations }: { citations: CitationDTO[] }) {
 }
 
 function CitationItem({ citation }: { citation: GroupedCitation }) {
-  const [showBody, setShowBody] = useState(false);
-  const [showExcerpt, setShowExcerpt] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+
+  const toggleVerification = () => {
+    setShowVerification((value) => !value);
+  };
+
+  const expandVerification = () => {
+    setShowVerification(true);
+  };
+
+  const handleCitationKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+
+    event.preventDefault();
+    expandVerification();
+  };
 
   return (
-    <div className="rounded-md border p-3">
+    <div
+      role="button"
+      tabIndex={0}
+      aria-expanded={showVerification}
+      aria-label={`${showVerification ? "收起" : "核实"}知识卡片：${citation.summary}`}
+      className="cursor-pointer rounded-md border p-3 transition hover:border-primary/60 hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+      onClick={expandVerification}
+      onKeyDown={handleCitationKeyDown}
+    >
       <div className="mb-2 flex flex-wrap gap-2">
         <Badge variant="outline">{SOURCE_TYPE_LABELS[citation.sourceType]}</Badge>
         <Badge>{VERIFICATION_STATUS_LABELS[citation.verificationStatus]}</Badge>
       </div>
-      <p className="text-sm font-medium">{citation.summary}</p>
+      <p className="break-words text-sm font-medium">
+        <LinkifiedText text={citation.summary} />
+      </p>
 
       <ul className="mt-2 space-y-1">
         {citation.claimTexts.map((claim, index) => (
           <li
             key={index}
-            className="border-l-2 border-muted-foreground/30 pl-3 text-sm text-muted-foreground"
+            className="break-words border-l-2 border-muted-foreground/30 pl-3 text-sm text-muted-foreground"
           >
-            {claim}
+            <LinkifiedText text={claim} />
           </li>
         ))}
       </ul>
@@ -179,49 +207,44 @@ function CitationItem({ citation }: { citation: GroupedCitation }) {
           type="button"
           variant="ghost"
           size="sm"
-          onClick={() => setShowBody((value) => !value)}
+          onClick={(event) => {
+            event.stopPropagation();
+            toggleVerification();
+          }}
         >
-          {showBody ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
-          {showBody ? "收起正文" : "展开正文"}
+          {showVerification ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
+          {showVerification ? "收起核实材料" : "核实这张卡片"}
         </Button>
-        {citation.sourceExcerpt && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowExcerpt((value) => !value)}
-          >
-            {showExcerpt ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
-            {showExcerpt ? "收起原文摘录" : "展开原文摘录"}
-          </Button>
-        )}
-      </div>
-
-      {showBody && (
-        <p className="mt-2 whitespace-pre-wrap rounded-md bg-muted/50 p-3 text-sm leading-6">
-          {citation.body}
-        </p>
-      )}
-      {showExcerpt && citation.sourceExcerpt && (
-        <div className="mt-2 rounded-md bg-muted/50 p-3">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">来源原文摘录</p>
-          <p className="whitespace-pre-wrap text-sm leading-6 text-muted-foreground">
-            {citation.sourceExcerpt}
-          </p>
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-col gap-2 text-sm md:flex-row md:items-center md:justify-between">
-        <span className="text-muted-foreground">{citation.sourceDescription}</span>
         {citation.sourceUrl && (
           <Button asChild variant="ghost" size="sm">
-            <a href={citation.sourceUrl} target="_blank" rel="noreferrer">
+            <a
+              href={citation.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(event) => event.stopPropagation()}
+            >
               <ExternalLink className="mr-2 h-4 w-4" />
               查看来源
             </a>
           </Button>
         )}
       </div>
+
+      {showVerification && (
+        <div className="mt-2 space-y-3 border-t pt-3">
+          <p className="whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-sm leading-6">
+            <LinkifiedText text={citation.body} />
+          </p>
+          {citation.sourceExcerpt && (
+            <SourceExcerptBlock sourceExcerpt={citation.sourceExcerpt} />
+          )}
+          <div className="flex flex-col gap-2 text-sm md:flex-row md:items-center md:justify-between">
+            <span className="break-words text-muted-foreground">
+              <LinkifiedText text={citation.sourceDescription} />
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

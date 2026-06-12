@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ArrowLeft, MessageSquareWarning } from "lucide-react";
+import { Archive, ArrowLeft, MessageSquareWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface FeedbackItem {
@@ -20,6 +20,7 @@ export default function AnswerFeedbackPage() {
   const { data: session, status } = useSession();
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [archivingId, setArchivingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchFeedback = useCallback(async () => {
@@ -50,6 +51,34 @@ export default function AnswerFeedbackPage() {
     }
   }, [fetchFeedback, router, session, status]);
 
+  const archiveFeedback = async (item: FeedbackItem) => {
+    if (archivingId) return;
+    if (!window.confirm(`确认归档「${item.questionText}」的没解决反馈吗？`)) return;
+
+    setArchivingId(item.questionId);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/knowledge/answer-feedback/list", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId: item.questionId }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "归档反馈失败");
+        return;
+      }
+
+      setItems((current) => current.filter((currentItem) => currentItem.questionId !== item.questionId));
+    } catch {
+      setError("归档反馈失败");
+    } finally {
+      setArchivingId(null);
+    }
+  };
+
   if (status === "loading") {
     return <div className="p-6 text-sm text-muted-foreground">正在加载...</div>;
   }
@@ -70,7 +99,13 @@ export default function AnswerFeedbackPage() {
           </p>
         </div>
       </div>
-      <FeedbackBody loading={loading} error={error} items={items} />
+      <FeedbackBody
+        loading={loading}
+        error={error}
+        items={items}
+        archivingId={archivingId}
+        onArchive={archiveFeedback}
+      />
     </div>
   );
 }
@@ -79,10 +114,14 @@ function FeedbackBody({
   loading,
   error,
   items,
+  archivingId,
+  onArchive,
 }: {
   loading: boolean;
   error: string | null;
   items: FeedbackItem[];
+  archivingId: string | null;
+  onArchive: (item: FeedbackItem) => void;
 }) {
   if (error) {
     return <p className="text-sm text-destructive">{error}</p>;
@@ -104,10 +143,22 @@ function FeedbackBody({
         <div key={item.questionId} className="rounded-md border p-4">
           <div className="flex items-start justify-between gap-3">
             <p className="flex-1 text-sm font-medium leading-6">{item.questionText}</p>
-            <span className="flex shrink-0 items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-xs text-destructive">
-              <MessageSquareWarning className="h-3 w-3" />
-              点没解决 {item.count} 次
-            </span>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <span className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-1 text-xs text-destructive">
+                <MessageSquareWarning className="h-3 w-3" />
+                点没解决 {item.count} 次
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onArchive(item)}
+                disabled={archivingId === item.questionId}
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                {archivingId === item.questionId ? "归档中" : "归档"}
+              </Button>
+            </div>
           </div>
           {item.lastFeedbackAt && (
             <p className="mt-2 text-xs text-muted-foreground">

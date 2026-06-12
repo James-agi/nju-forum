@@ -138,6 +138,7 @@ model KnowledgeCard {
   body               String             @db.Text
   sourceExcerpt      String?            @db.Text
   sourceUrl          String?
+  sourceUrls         String?            @db.Text   // JSON array: ["url1", "url2"]
   sourceDescription  String
   sourceType         SourceType
   verificationStatus VerificationStatus
@@ -207,11 +208,13 @@ model KnowledgeAnswerFeedback {
   userId     String
   note       String?           @db.Text
   createdAt  DateTime          @default(now())
+  archivedAt DateTime?
 
   @@unique([questionId, userId])
   @@index([questionId])
   @@index([userId])
   @@index([createdAt])
+  @@index([archivedAt])
 }
 
 model KnowledgeGap {
@@ -234,6 +237,7 @@ model KnowledgeGap {
   updatedAt          DateTime           @updatedAt
 
   @@index([normalizedQuestion])
+  @@unique([normalizedQuestion])
   @@index([status])
   @@index([gapType])
   @@index([linkedCardId])

@@ -44,10 +44,13 @@ export const cardCreateSchema = z.object({
   body: trimmedRequired("正文", 12000),
   sourceExcerpt: optionalText("原文摘录", 12000),
   sourceUrl: optionalUrl,
+  sourceUrls: z.array(z.string().url()).optional(),
   sourceDescription: trimmedRequired("来源说明", 500),
   sourceType: z.enum(SOURCE_TYPES),
   verificationStatus: z.enum(VERIFICATION_STATUSES),
   domainTag: trimmedRequired("领域标签", 80),
+  action: z.enum(["create", "merge"]).optional(),
+  mergeWithSummary: z.string().trim().max(200).nullish(),
 });
 
 export const cardUpdateSchema = cardCreateSchema.partial().extend({

@@ -77,13 +77,23 @@ export async function PATCH(
       );
     }
 
+    // 先检查卡片是否存在且未被归档
+    const existing = await db.knowledgeCard.findFirst({
+      where: { id: params.id, archivedAt: null },
+      select: { id: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "知识卡片不存在" }, { status: 404 });
+    }
+
     const hasSourceUrl = Object.prototype.hasOwnProperty.call(payload, "sourceUrl");
-    const { archive, ...fields } = parsed.data;
+    const { archive, sourceUrls, ...fields } = parsed.data;
 
     const card = await db.knowledgeCard.update({
       where: { id: params.id },
       data: {
         ...fields,
+        sourceUrls: sourceUrls ? JSON.stringify(sourceUrls) : undefined,
         sourceUrl: hasSourceUrl ? fields.sourceUrl ?? null : undefined,
         updatedById: authz.user.id,
         archivedAt:

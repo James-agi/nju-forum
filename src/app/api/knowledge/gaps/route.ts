@@ -55,35 +55,42 @@ export async function GET(req: Request) {
         ? (status as GapStatusValue)
         : undefined;
 
+    if (statusFilter) {
+      // 有状态筛选时直接用 DB 排序和分页
+      const [filtered, total] = await Promise.all([
+        db.knowledgeGap.findMany({
+          where: { status: statusFilter },
+          include: { linkedCard: { select: { summary: true } } },
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+        }),
+        db.knowledgeGap.count({ where: { status: statusFilter } }),
+      ]);
+      return NextResponse.json({
+        gaps: filtered.map(toGapDTO),
+        pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+      });
+    }
+
+    // 无筛选时按状态优先级排序（OPEN 优先），需拉全量在内存中排序
     const [allGaps, total] = await Promise.all([
       db.knowledgeGap.findMany({
-        where: statusFilter ? { status: statusFilter } : undefined,
-        include: {
-          linkedCard: { select: { summary: true } },
-        },
+        include: { linkedCard: { select: { summary: true } } },
         orderBy: { createdAt: "desc" },
       }),
-      db.knowledgeGap.count({
-        where: statusFilter ? { status: statusFilter } : undefined,
-      }),
+      db.knowledgeGap.count(),
     ]);
 
-    const sorted = statusFilter
-      ? allGaps
-      : allGaps.sort((a, b) => {
-          const byStatus = GAP_STATUS_RANK[a.status] - GAP_STATUS_RANK[b.status];
-          if (byStatus !== 0) return byStatus;
-          return b.createdAt.getTime() - a.createdAt.getTime();
-        });
+    const sorted = allGaps.sort((a, b) => {
+      const byStatus = GAP_STATUS_RANK[a.status] - GAP_STATUS_RANK[b.status];
+      if (byStatus !== 0) return byStatus;
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
 
     return NextResponse.json({
       gaps: sorted.slice(skip, skip + limit).map(toGapDTO),
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (error) {
     console.error("Error fetching knowledge gaps:", error);

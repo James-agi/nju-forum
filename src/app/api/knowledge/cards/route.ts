@@ -127,9 +127,13 @@ export async function POST(req: Request) {
       ? "NEEDS_REVIEW"
       : parsed.data.verificationStatus;
 
+    const sourceUrls = parsed.data.sourceUrls
+      || (parsed.data.sourceUrl ? [parsed.data.sourceUrl] : null);
+
     const card = await db.knowledgeCard.create({
       data: {
         ...parsed.data,
+        sourceUrls: sourceUrls ? JSON.stringify(sourceUrls) : null,
         verificationStatus,
         sourceUrl: parsed.data.sourceUrl ?? null,
         createdById: authz.user.id,

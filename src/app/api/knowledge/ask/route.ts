@@ -68,24 +68,45 @@ export async function POST(req: Request) {
         },
       });
 
-      const existingGap = await db.knowledgeGap.findFirst({
-        where: {
-          normalizedQuestion,
-          status: { in: ["OPEN", "DUPLICATE"] },
-        },
-        orderBy: { createdAt: "asc" },
-      });
-
-      const gap =
-        existingGap ??
-        (await db.knowledgeGap.create({
-          data: {
-            questionId: question.id,
-            originalQuestion: questionText,
+      const gap = await db.$transaction(async (tx) => {
+        const existingGap = await tx.knowledgeGap.findFirst({
+          where: {
             normalizedQuestion,
-            status: "OPEN",
+            status: { in: ["OPEN", "DUPLICATE"] },
           },
-        }));
+          orderBy: { createdAt: "asc" },
+        });
+
+        if (existingGap) return existingGap;
+
+        try {
+          return await tx.knowledgeGap.create({
+            data: {
+              questionId: question.id,
+              originalQuestion: questionText,
+              normalizedQuestion,
+              status: "OPEN",
+            },
+          });
+        } catch (err) {
+          // @@unique([normalizedQuestion]) 并发冲突时回退到已存在的记录
+          if (
+            typeof err === "object" &&
+            err !== null &&
+            "code" in err &&
+            (err as { code: string }).code === "P2002"
+          ) {
+            return tx.knowledgeGap.findFirstOrThrow({
+              where: {
+                normalizedQuestion,
+                status: { in: ["OPEN", "DUPLICATE"] },
+              },
+              orderBy: { createdAt: "asc" },
+            });
+          }
+          throw err;
+        }
+      });
 
       const response: AskResponse = {
         status: "GAP_RECORDED",
