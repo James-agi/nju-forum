@@ -20,6 +20,10 @@
 .DS_Store
 *.pem
 
+# 上传的静态资源（图片、PDF）
+public/knowledge-images/
+public/pdfs/
+
 # debug
 *.log
 npm-debug.log*
