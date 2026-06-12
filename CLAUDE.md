@@ -69,10 +69,18 @@ cd D:/nju-forum && npm run dev > /tmp/nextjs.log 2>&1 &
 
 ## 步骤 6：批次重跑（用户说"重跑"时执行）
 
-通过 `temp-rerun.js` 脚本调用 opencode API 重跑失败 jobs（绕过 Next.js 认证）。
-脚本路径：`D:/nju-forum/temp-rerun.js`，用法：`"C:/Program Files/nodejs/node.exe" D:/nju-forum/temp-rerun.js`
+通过 `rerun-batch.js` 脚本调用 opencode API 重跑失败 jobs（绕过 Next.js 认证）。
+脚本路径：`D:/nju-forum/rerun-batch.js`，用法：`"C:/Program Files/nodejs/node.exe" D:/nju-forum/rerun-batch.js`
 
-重跑脚本自动跳过 EXPORTED 的 jobs，只跑 FAILED/RUNNING 的。
+重跑脚本自动跳过 EXPORTED/DONE 的 jobs，也跳过带 `closed` 标记的 jobs（如认证阻塞），只跑未关闭的 FAILED/RUNNING 的。
+
+### closed 标记
+
+在 batch.json 的 job 对象上加 `closed` 和 `closedReason` 字段，表示该 job 已确认不需要重跑：
+- `closed: "auth-blocked"` — 需要认证才能访问的资源
+- `closed: "user-reviewed"` — 用户审查后确认不需要
+
+monitor 和重跑脚本都会识别此标记。
 
 ### 实时监控要求
 
@@ -97,4 +105,4 @@ cd D:/nju-forum && npm run dev > /tmp/nextjs.log 2>&1 &
 | cards=err | JSON 格式损坏 | 检查 cards.json 内容 |
 
 允许的命令：
-allowed-tools: Bash("C:/Program Files/nodejs/node.exe" "D:/nju-forum/agent-workflows/card-batch/monitor.js":*), Bash("C:/Program Files/nodejs/node.exe" "D:/nju-forum/agent-workflows/card-batch/monitor-daemon.js":*), Bash("C:/Program Files/nodejs/node.exe" D:/nju-forum/temp-rerun.js*)
+allowed-tools: Bash("C:/Program Files/nodejs/node.exe" "D:/nju-forum/agent-workflows/card-batch/monitor.js":*), Bash("C:/Program Files/nodejs/node.exe" "D:/nju-forum/agent-workflows/card-batch/monitor-daemon.js":*), Bash("C:/Program Files/nodejs/node.exe" D:/nju-forum/rerun-batch.js*)

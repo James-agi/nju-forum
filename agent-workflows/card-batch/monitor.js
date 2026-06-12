@@ -112,7 +112,8 @@ function monitor(batchId) {
       }
       const gpt = has("gpt-review.md") ? "✓" : " ";
       const job = batch.jobs.find((j) => j.slug === d || j.directory?.endsWith(d));
-      const status = job?.status || "?";
+      const rawStatus = job?.status || "?";
+      const status = job?.closed ? `CLOSED(${job.closed})` : rawStatus;
       // Followup status
       let fwStr = " ";
       const fwDir = path.join(jp, "followups");
@@ -186,6 +187,15 @@ function monitor(batchId) {
     if (status.startedAt) console.log(`started: ${status.startedAt}`);
     if (status.endedAt) console.log(`ended: ${status.endedAt}`);
     if (status.error) console.log(`error: ${status.error}`);
+  }
+
+  // Closed jobs summary
+  const closedJobs = batch.jobs.filter(j => j.closed);
+  if (closedJobs.length > 0) {
+    console.log(`\n--- ${closedJobs.length} jobs closed (won't rerun) ---`);
+    for (const j of closedJobs) {
+      console.log(`  ${j.id}: [${j.closed}] ${j.closedReason || ""}`);
+    }
   }
 
   // Exported cards

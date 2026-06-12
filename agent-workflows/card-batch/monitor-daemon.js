@@ -122,7 +122,7 @@ function getBatchInfo(dir) {
           s3: has("transcript-compare_source.md"),
           cards,
           gpt: gptStatus,
-          status: jobDef?.status || "?",
+          status: jobDef?.closed ? `CLOSED(${jobDef.closed})` : (jobDef?.status || "?"),
           fw: fwStr,
         });
       }
@@ -185,6 +185,16 @@ function generateReport() {
       lines.push(`**exported cards: ${exportCards}**`);
       if (fs.existsSync(importReport)) lines.push(`import-report: ✅`);
       if (fs.existsSync(iterReport)) lines.push(`iteration-report: ✅`);
+      lines.push("");
+    }
+
+    // Closed jobs summary
+    const closedJobs = (batch.jobs || []).filter(j => j.closed);
+    if (closedJobs.length > 0) {
+      lines.push(`**${closedJobs.length} jobs closed (won't rerun):**`);
+      for (const j of closedJobs) {
+        lines.push(`  - ${j.id}: [${j.closed}] ${j.closedReason || ""}`);
+      }
       lines.push("");
     }
   }
