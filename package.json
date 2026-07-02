@@ -16,9 +16,6 @@
     "db:studio": "npx prisma studio",
     "smoke:p0": "npx tsx scripts/p0-smoke.ts"
   },
-  "prisma": {
-    "seed": "npx tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "@radix-ui/react-avatar": "^1.1.11",
