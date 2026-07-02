@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SectionLabel } from "@/components/ui/section-label";
 import { Users, FileText, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -21,10 +22,10 @@ export default async function AdminPage() {
   ]);
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-6">
-      <h1 className="text-2xl font-bold mb-6">管理后台</h1>
+    <div className="container mx-auto max-w-4xl px-4 py-8">
+      <SectionLabel en="Admin · 管理后台" zh="管理后台" />
 
-      <div className="grid gap-4 md:grid-cols-3 mb-8">
+      <div className="mt-8 animate-fade-in grid gap-4 md:grid-cols-3 mb-8">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">总用户数</CardTitle>

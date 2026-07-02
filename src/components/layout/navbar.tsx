@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ThemeToggle } from "@/components/forum/theme-toggle";
 import {
   BookOpen,
   HelpCircle,
@@ -26,24 +27,25 @@ export function Navbar() {
   const { data: session, status } = useSession();
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-14 items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2 font-bold text-lg">
+    <header className="sticky top-0 z-50 px-4 pt-3">
+      <div className="container mx-auto flex h-12 items-center justify-between rounded-2xl border border-border bg-background/80 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <Link href="/" className="flex items-center gap-2 text-lg font-bold">
           <BookOpen className="h-5 w-5" />
-          南大论坛
+          知南
         </Link>
 
         <nav className="flex items-center gap-2">
+          <ThemeToggle />
+          <Button asChild variant="ghost" size="sm">
+            <Link href="/knowledge">
+              <HelpCircle className="mr-2 h-4 w-4" />
+              知识问答
+            </Link>
+          </Button>
           {status === "loading" ? (
             <div className="h-8 w-16 animate-pulse rounded bg-muted" />
           ) : session?.user ? (
             <>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/knowledge">
-                  <HelpCircle className="mr-2 h-4 w-4" />
-                  知识问答
-                </Link>
-              </Button>
               <Button asChild variant="ghost" size="sm">
                 <Link href="/forum/new">
                   <PenSquare className="mr-2 h-4 w-4" />

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,9 +12,16 @@ interface ReplyFormProps {
   parentId?: string;
   onCancel?: () => void;
   placeholder?: string;
+  canReply?: boolean;
 }
 
-export function ReplyForm({ postId, parentId, onCancel, placeholder }: ReplyFormProps) {
+export function ReplyForm({
+  postId,
+  parentId,
+  onCancel,
+  placeholder,
+  canReply = true,
+}: ReplyFormProps) {
   const router = useRouter();
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,7 +29,7 @@ export function ReplyForm({ postId, parentId, onCancel, placeholder }: ReplyForm
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) return;
+    if (!content.trim() || !canReply) return;
 
     setLoading(true);
     setError("");
@@ -47,6 +55,14 @@ export function ReplyForm({ postId, parentId, onCancel, placeholder }: ReplyForm
       setLoading(false);
     }
   };
+
+  if (!canReply) {
+    return (
+      <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+        登录后参与讨论。<Link href="/login" className="ml-1 text-primary hover:underline">立即登录</Link>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
