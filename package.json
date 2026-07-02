@@ -17,6 +17,7 @@
     "smoke:p0": "npx tsx scripts/p0-smoke.ts"
   },
   "dependencies": {
+    "@node-rs/jieba": "^2.0.1",
     "@prisma/client": "^6.19.3",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -38,6 +39,7 @@
     "prisma": "^6.19.3",
     "react": "^18",
     "react-dom": "^18",
+    "resend": "^4.7.0",
     "tailwind-merge": "^3.6.0",
     "tesseract.js": "^7.0.0",
     "zod": "^4.4.3"
