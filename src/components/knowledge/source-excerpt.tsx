@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type PointerEvent, type WheelEvent } from "react";
+import { Fragment, useState, type PointerEvent, type ReactNode, type WheelEvent } from "react";
 import { ExternalLink, Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface SourceExcerptBlockProps {
   sourceExcerpt: string;
@@ -21,7 +22,14 @@ type SourceExcerptPart =
 
 type InlineTextPart =
   | { type: "text"; text: string }
+  | { type: "strong"; text: string }
   | { type: "link"; text: string; href: string };
+
+type MarkdownBlock =
+  | { type: "paragraph"; lines: string[] }
+  | { type: "heading"; text: string; level: number }
+  | { type: "ul"; items: string[] }
+  | { type: "ol"; items: string[] };
 
 const LOCAL_IMAGE_MARKDOWN =
   /^!\[([^\]\n]*)\]\((\/knowledge-images\/[A-Za-z0-9._~/%-]+)\)$/;
@@ -29,6 +37,10 @@ const MARKDOWN_LINK_PATTERN =
   /\[([^\]\n]+)\]\((https?:\/\/[^\s]+|\/[A-Za-z0-9._~:/?#[\]@!$&'()*+,;=%-]+)\)/gi;
 const BARE_URL_PATTERN = /https?:\/\/[^\s<>"']+/gi;
 const TRAILING_URL_PUNCTUATION = /[.,;:!?，。；：！？）)\]}]+$/;
+const STRONG_PATTERN = /(\*\*|__)([^*_][\s\S]*?)\1/g;
+const HEADING_PATTERN = /^(#{1,4})\s+(.+)$/;
+const UNORDERED_LIST_PATTERN = /^\s*[-*]\s+(.+)$/;
+const ORDERED_LIST_PATTERN = /^\s*\d+[.)]\s+(.+)$/;
 const MIN_IMAGE_ZOOM = 0.5;
 const MAX_IMAGE_ZOOM = 4;
 const IMAGE_ZOOM_STEP = 0.2;
@@ -93,6 +105,44 @@ function splitBareUrls(text: string): InlineTextPart[] {
   return parts;
 }
 
+function splitStrongText(text: string): InlineTextPart[] {
+  const parts: InlineTextPart[] = [];
+  let lastIndex = 0;
+  STRONG_PATTERN.lastIndex = 0;
+
+  let match: RegExpExecArray | null;
+  while ((match = STRONG_PATTERN.exec(text)) !== null) {
+    const index = match.index;
+    if (index > lastIndex) {
+      parts.push({ type: "text", text: text.slice(lastIndex, index) });
+    }
+
+    parts.push({ type: "strong", text: match[2] });
+    lastIndex = index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push({ type: "text", text: text.slice(lastIndex) });
+  }
+
+  return parts;
+}
+
+function parsePlainInlineText(text: string): InlineTextPart[] {
+  const parts: InlineTextPart[] = [];
+
+  for (const part of splitBareUrls(text)) {
+    if (part.type === "text") {
+      parts.push(...splitStrongText(part.text));
+      continue;
+    }
+
+    parts.push(part);
+  }
+
+  return parts;
+}
+
 function parseInlineLinks(text: string): InlineTextPart[] {
   const parts: InlineTextPart[] = [];
   let lastIndex = 0;
@@ -106,7 +156,7 @@ function parseInlineLinks(text: string): InlineTextPart[] {
     const index = match.index;
 
     if (index > lastIndex) {
-      parts.push(...splitBareUrls(text.slice(lastIndex, index)));
+      parts.push(...parsePlainInlineText(text.slice(lastIndex, index)));
     }
 
     if (isSafeHref(href)) {
@@ -119,10 +169,80 @@ function parseInlineLinks(text: string): InlineTextPart[] {
   }
 
   if (lastIndex < text.length) {
-    parts.push(...splitBareUrls(text.slice(lastIndex)));
+    parts.push(...parsePlainInlineText(text.slice(lastIndex)));
   }
 
   return parts.length > 0 ? parts : [{ type: "text", text }];
+}
+
+function parseMarkdownBlocks(text: string): MarkdownBlock[] {
+  const blocks: MarkdownBlock[] = [];
+  const paragraphLines: string[] = [];
+  let listBlock: Extract<MarkdownBlock, { type: "ul" | "ol" }> | null = null;
+
+  const flushParagraph = () => {
+    const lines = paragraphLines.map((line) => line.trimEnd()).filter(Boolean);
+    if (lines.length > 0) blocks.push({ type: "paragraph", lines });
+    paragraphLines.length = 0;
+  };
+
+  const flushList = () => {
+    if (listBlock && listBlock.items.length > 0) {
+      blocks.push(listBlock);
+    }
+    listBlock = null;
+  };
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trimEnd();
+
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    const headingMatch = line.match(HEADING_PATTERN);
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      blocks.push({
+        type: "heading",
+        level: Math.min(4, headingMatch[1].length),
+        text: headingMatch[2].trim(),
+      });
+      continue;
+    }
+
+    const unorderedMatch = line.match(UNORDERED_LIST_PATTERN);
+    if (unorderedMatch) {
+      flushParagraph();
+      if (!listBlock || listBlock.type !== "ul") {
+        flushList();
+        listBlock = { type: "ul", items: [] };
+      }
+      listBlock.items.push(unorderedMatch[1].trim());
+      continue;
+    }
+
+    const orderedMatch = line.match(ORDERED_LIST_PATTERN);
+    if (orderedMatch) {
+      flushParagraph();
+      if (!listBlock || listBlock.type !== "ol") {
+        flushList();
+        listBlock = { type: "ol", items: [] };
+      }
+      listBlock.items.push(orderedMatch[1].trim());
+      continue;
+    }
+
+    flushList();
+    paragraphLines.push(line);
+  }
+
+  flushParagraph();
+  flushList();
+  return blocks;
 }
 
 function parseSourceExcerpt(sourceExcerpt: string): SourceExcerptPart[] {
@@ -160,6 +280,14 @@ export function LinkifiedText({ text }: { text: string }) {
   return (
     <>
       {parts.map((part, index) => {
+        if (part.type === "strong") {
+          return (
+            <strong key={index} className="font-semibold text-foreground">
+              {part.text}
+            </strong>
+          );
+        }
+
         if (part.type === "link") {
           const external = /^https?:\/\//i.test(part.href);
 
@@ -181,6 +309,77 @@ export function LinkifiedText({ text }: { text: string }) {
         return <span key={index}>{part.text}</span>;
       })}
     </>
+  );
+}
+
+function renderParagraphLines(lines: string[]) {
+  return lines.map((line, index) => (
+    <Fragment key={index}>
+      {index > 0 && <br />}
+      <LinkifiedText text={line} />
+    </Fragment>
+  ));
+}
+
+export function MarkdownText({
+  text,
+  className,
+}: {
+  text: string;
+  className?: string;
+}) {
+  const blocks = parseMarkdownBlocks(text);
+
+  if (blocks.length === 0) return null;
+
+  return (
+    <div className={cn("space-y-2 break-words", className)}>
+      {blocks.map((block, index): ReactNode => {
+        if (block.type === "heading") {
+          return (
+            <p
+              key={index}
+              className={cn(
+                "font-semibold text-foreground",
+                block.level <= 2 ? "text-base" : "text-sm"
+              )}
+            >
+              <LinkifiedText text={block.text} />
+            </p>
+          );
+        }
+
+        if (block.type === "ul") {
+          return (
+            <ul key={index} className="ml-5 list-disc space-y-1">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>
+                  <LinkifiedText text={item} />
+                </li>
+              ))}
+            </ul>
+          );
+        }
+
+        if (block.type === "ol") {
+          return (
+            <ol key={index} className="ml-5 list-decimal space-y-1">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex}>
+                  <LinkifiedText text={item} />
+                </li>
+              ))}
+            </ol>
+          );
+        }
+
+        return (
+          <p key={index}>
+            {renderParagraphLines(block.lines)}
+          </p>
+        );
+      })}
+    </div>
   );
 }
 
@@ -374,12 +573,12 @@ export function SourceExcerptBlock({ sourceExcerpt }: SourceExcerptBlockProps) {
           }
 
           return (
-            <p
+            <div
               key={index}
-              className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground"
+              className="text-sm leading-6 text-muted-foreground"
             >
-              <LinkifiedText text={part.text} />
-            </p>
+              <MarkdownText text={part.text} />
+            </div>
           );
         })}
       </div>

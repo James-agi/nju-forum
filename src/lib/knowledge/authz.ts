@@ -12,6 +12,10 @@ export type AuthzResult =
   | { ok: true; user: KnowledgeApiUser }
   | { ok: false; response: NextResponse };
 
+export type KnowledgeGuestAuthzResult =
+  | { ok: true; user: KnowledgeApiUser | null }
+  | { ok: false; response: NextResponse };
+
 export async function requireKnowledgeUser(): Promise<AuthzResult> {
   const session = await getSession();
   if (!session?.user) {
@@ -19,6 +23,27 @@ export async function requireKnowledgeUser(): Promise<AuthzResult> {
       ok: false,
       response: NextResponse.json({ error: "请先登录" }, { status: 401 }),
     };
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true, role: true, banned: true },
+  });
+
+  if (!user || user.banned) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "账号不可用" }, { status: 403 }),
+    };
+  }
+
+  return { ok: true, user };
+}
+
+export async function allowKnowledgeGuest(): Promise<KnowledgeGuestAuthzResult> {
+  const session = await getSession();
+  if (!session?.user) {
+    return { ok: true, user: null };
   }
 
   const user = await db.user.findUnique({

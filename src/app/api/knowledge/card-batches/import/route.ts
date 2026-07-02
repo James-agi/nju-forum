@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     ];
     let created = 0;
     let merged = 0;
-    let skipped = 0;
+    const skipped = 0;
     let failed = 0;
 
     // 在事务中执行全部 DB 操作，失败时整体回滚
@@ -107,15 +107,34 @@ export async function POST(req: Request) {
           // 找不到目标卡片 → 降级为新建
         }
 
-        // 新建模式
-        const { action, mergeWithSummary, ...cardFields } = parsedCard.data;
-        const sourceUrls = cardFields.sourceUrls
+        // 新建模式 — 只取 Prisma 需要的字段，丢弃 action / mergeWithSummary
+        const {
+          summary,
+          body,
+          sourceExcerpt,
+          sourceUrl,
+          sourceUrls,
+          sourceDescription,
+          sourceType,
+          domainTag,
+        } = parsedCard.data;
+        const cardFields = {
+          summary,
+          body,
+          sourceExcerpt,
+          sourceUrl,
+          sourceUrls,
+          sourceDescription,
+          sourceType,
+          domainTag,
+        };
+        const sourceUrlsFinal = cardFields.sourceUrls
           || (cardFields.sourceUrl ? [cardFields.sourceUrl] : null);
 
         await tx.knowledgeCard.create({
           data: {
             ...cardFields,
-            sourceUrls: sourceUrls ? JSON.stringify(sourceUrls) : null,
+            sourceUrls: sourceUrlsFinal ? JSON.stringify(sourceUrlsFinal) : null,
             verificationStatus: "NEEDS_REVIEW",
             sourceUrl: cardFields.sourceUrl ?? null,
             createdById: authz.user.id,

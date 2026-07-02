@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LinkifiedText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
+import { LinkifiedText, MarkdownText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
 import {
   SOURCE_TYPE_LABELS,
   VERIFICATION_STATUS_LABELS,
@@ -252,9 +252,10 @@ export function CardList({ cards, loading, onEdit, onArchive, onUpdated }: CardL
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 pt-0">
-                    <p className="whitespace-pre-wrap break-words text-sm leading-6 text-muted-foreground">
-                      <LinkifiedText text={expanded ? card.body : getPreview(card.body)} />
-                    </p>
+                    <MarkdownText
+                      text={expanded ? card.body : getPreview(card.body)}
+                      className="text-sm leading-6 text-muted-foreground"
+                    />
                     <Button
                       type="button"
                       variant="ghost"

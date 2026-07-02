@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { connect } from "node:net";
 
-let state: {
+const state: {
   process: ChildProcess | null;
   port: number;
   ready: boolean;

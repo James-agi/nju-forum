@@ -39,9 +39,14 @@ const optionalText = (name: string, max = 12000) =>
     return trimmed.length > 0 ? trimmed : undefined;
   }, z.string().max(max, `${name}过长`).optional());
 
+const IMAGE_MARKDOWN_PATTERN = /!\[[^\]\n]*\]\([^)]+\)/;
+
 export const cardCreateSchema = z.object({
   summary: trimmedRequired("摘要", 200),
-  body: trimmedRequired("正文", 12000),
+  body: trimmedRequired("正文", 12000).refine(
+    (value) => !IMAGE_MARKDOWN_PATTERN.test(value),
+    "正文不能包含图片 Markdown；图片请放在原文摘录 sourceExcerpt"
+  ),
   sourceExcerpt: optionalText("原文摘录", 12000),
   sourceUrl: optionalUrl,
   sourceUrls: z.array(z.string().url()).optional(),

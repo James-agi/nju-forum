@@ -166,7 +166,7 @@ async function playwrightFetch(url: string): Promise<string> {
       const remove = document.querySelectorAll("nav, footer, header, [role='navigation'], aside");
       remove.forEach((el) => el.remove());
       const main = document.querySelector("main, article, [role='main'], .content, .page-body");
-      return (main || document.body).innerText;
+      return ((main || document.body) as HTMLElement).innerText;
     });
     return text;
   } finally {

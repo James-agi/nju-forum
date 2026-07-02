@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { LinkifiedText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
+import { LinkifiedText, MarkdownText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
 import {
   SOURCE_TYPE_LABELS,
   VERIFICATION_STATUS_LABELS,
@@ -107,9 +107,7 @@ export function QuestionBox() {
             <CardTitle className="text-lg">回答</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <p className="whitespace-pre-wrap break-words text-sm leading-7">
-              <LinkifiedText text={answer.answer} />
-            </p>
+            <MarkdownText text={answer.answer} className="text-sm leading-7" />
             <div className="space-y-3">
               <h2 className="text-sm font-medium">引用来源</h2>
               <CitationList citations={answer.citations} />
@@ -232,9 +230,10 @@ function CitationItem({ citation }: { citation: GroupedCitation }) {
 
       {showVerification && (
         <div className="mt-2 space-y-3 border-t pt-3">
-          <p className="whitespace-pre-wrap break-words rounded-md bg-muted/50 p-3 text-sm leading-6">
-            <LinkifiedText text={citation.body} />
-          </p>
+          <MarkdownText
+            text={citation.body}
+            className="rounded-md bg-muted/50 p-3 text-sm leading-6"
+          />
           {citation.sourceExcerpt && (
             <SourceExcerptBlock sourceExcerpt={citation.sourceExcerpt} />
           )}

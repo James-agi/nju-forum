@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
+import { MarkdownText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
 import {
   CARD_BATCH_PHASE_LABELS,
   CARD_BATCH_PHASES,
@@ -820,7 +820,7 @@ export default function AdminKnowledgeBatchPage() {
                           <div className="mt-3 space-y-3">
                             <div>
                               <p className="text-xs font-medium text-muted-foreground">正文</p>
-                              <p className="mt-1 whitespace-pre-wrap text-sm">{card.body}</p>
+                              <MarkdownText text={card.body || ""} className="mt-1 text-sm" />
                             </div>
                             {card.sourceExcerpt && (
                               <SourceExcerptBlock sourceExcerpt={card.sourceExcerpt} />

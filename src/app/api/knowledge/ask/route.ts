@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireKnowledgeUser } from "@/lib/knowledge/authz";
+import { allowKnowledgeGuest } from "@/lib/knowledge/authz";
 import { buildCardBoundedAnswer } from "@/lib/knowledge/answer";
 import { evaluateEvidence, retrieveKnowledgeCards } from "@/lib/knowledge/retrieval";
-import { classifyP0Scope } from "@/lib/knowledge/scope";
+import { classifyNoResult, classifyP0Scope } from "@/lib/knowledge/scope";
 import {
   askRequestSchema,
   formatValidationError,
@@ -18,7 +18,7 @@ const GAP_MESSAGE =
 
 export async function POST(req: Request) {
   try {
-    const authz = await requireKnowledgeUser();
+    const authz = await allowKnowledgeGuest();
     if (!authz.ok) return authz.response;
 
     const payload = await req.json();
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     if (!scope.inScope) {
       const question = await db.knowledgeQuestion.create({
         data: {
-          askerId: authz.user.id,
+          askerId: authz.user?.id ?? null,
           originalText: questionText,
           normalizedText: normalizedQuestion,
           status: "OUT_OF_SCOPE",
@@ -59,9 +59,31 @@ export async function POST(req: Request) {
     const evidence = evaluateEvidence(retrieval);
 
     if (!evidence.sufficient) {
+      if (evidence.reason === "EMPTY") {
+        const scopeDecision = classifyNoResult(questionText);
+        if (scopeDecision === "OUT_OF_SCOPE") {
+          const question = await db.knowledgeQuestion.create({
+            data: {
+              askerId: authz.user?.id ?? null,
+              originalText: questionText,
+              normalizedText: normalizedQuestion,
+              status: "OUT_OF_SCOPE",
+            },
+          });
+
+          const response: AskResponse = {
+            status: "OUT_OF_SCOPE",
+            questionId: question.id,
+            message: "这个问题不在 NJU 知识库收录范围内。",
+          };
+
+          return NextResponse.json(response);
+        }
+      }
+
       const question = await db.knowledgeQuestion.create({
         data: {
-          askerId: authz.user.id,
+          askerId: authz.user?.id ?? null,
           originalText: questionText,
           normalizedText: normalizedQuestion,
           status: "GAP_RECORDED",
@@ -138,7 +160,7 @@ export async function POST(req: Request) {
 
     const question = await db.knowledgeQuestion.create({
       data: {
-        askerId: authz.user.id,
+        askerId: authz.user?.id ?? null,
         originalText: questionText,
         normalizedText: normalizedQuestion,
         status: "ANSWERED",
