@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
 import { SectionLabel } from "@/components/ui/section-label";
 import { Clock } from "lucide-react";
+import { getPostTextPreview } from "@/lib/forum/post-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,7 @@ export default async function UserRepliesPage() {
                 <p className="text-sm text-muted-foreground mb-1">
                   回复了帖子：{reply.post.title}
                 </p>
-                <p className="text-sm truncate">{reply.content}</p>
+                <p className="text-sm truncate">{getPostTextPreview(reply.content, 2)}</p>
                 <span className="inline-flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
                   {new Date(reply.createdAt).toLocaleString("zh-CN")}

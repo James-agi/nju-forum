@@ -1,15 +1,18 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { ArrowLeft, Clock, Eye, Heart, MessageSquare } from "lucide-react";
 import { db } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Eye, Clock, MessageSquare, Heart, ArrowLeft } from "lucide-react";
 import { ReplyForm } from "@/components/forum/reply-form";
 import { ReplyList } from "@/components/forum/reply-list";
 import { FavoriteButton } from "@/components/forum/favorite-button";
 import { LoginGate } from "@/components/auth/login-gate";
 import { PostExitKey } from "@/components/forum/post-exit-key";
+import { PostContent } from "@/components/forum/post-content";
 import { getSession } from "@/lib/auth-utils";
+import { getStoredPostContentFormat } from "@/lib/forum/content-format";
+import { getPostTextPreview } from "@/lib/forum/post-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +23,8 @@ interface PostPageProps {
 export default async function PostPage({ params }: PostPageProps) {
   const session = await getSession();
 
-  const post = await db.post.update({
+  const post = await db.post.findUnique({
     where: { id: params.id },
-    data: { viewCount: { increment: 1 } },
     include: {
       author: { select: { id: true, name: true, avatar: true, createdAt: true } },
       section: { select: { id: true, name: true, icon: true } },
@@ -32,6 +34,14 @@ export default async function PostPage({ params }: PostPageProps) {
   });
 
   if (!post) notFound();
+
+  await db.post.update({
+    where: { id: params.id },
+    data: { viewCount: { increment: 1 } },
+  });
+
+  const contentFormat = getStoredPostContentFormat(post.content);
+  const displayViewCount = post.viewCount + 1;
 
   const replies = await db.reply.findMany({
     where: { postId: params.id, parentId: null },
@@ -59,7 +69,7 @@ export default async function PostPage({ params }: PostPageProps) {
     isFavorited = !!fav;
   }
 
-  const tagIds = post.tags.map((t) => t.id);
+  const tagIds = post.tags.map((tag) => tag.id);
   const relatedPostFilters =
     tagIds.length > 0
       ? [{ tags: { some: { id: { in: tagIds } } } }, { sectionId: post.sectionId }]
@@ -76,6 +86,9 @@ export default async function PostPage({ params }: PostPageProps) {
       _count: { select: { replies: true } },
     },
   });
+
+  const previewText = getPostTextPreview(post.content, 4);
+  const previewLines = previewText.split(/\r?\n/).filter(Boolean);
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
@@ -96,8 +109,13 @@ export default async function PostPage({ params }: PostPageProps) {
             <Badge variant="outline">
               {post.section.icon} {post.section.name}
             </Badge>
+            {contentFormat === "markdown" && (
+              <Badge variant="secondary">Markdown</Badge>
+            )}
             {post.tags.map((tag) => (
-              <Badge key={tag.id} variant="secondary">{tag.name}</Badge>
+              <Badge key={tag.id} variant="secondary">
+                {tag.name}
+              </Badge>
             ))}
           </div>
 
@@ -113,7 +131,7 @@ export default async function PostPage({ params }: PostPageProps) {
             </span>
             <span className="inline-flex items-center gap-1">
               <Eye className="h-3.5 w-3.5" />
-              {post.viewCount}
+              {displayViewCount}
             </span>
             <span className="inline-flex items-center gap-1">
               <MessageSquare className="h-3.5 w-3.5" />
@@ -127,31 +145,30 @@ export default async function PostPage({ params }: PostPageProps) {
         </header>
 
         <div className="py-8">
-          <div className="prose prose-sm max-w-none dark:prose-invert leading-7">
-            {session?.user ? (
-              post.content.split("\n").map((paragraph, i) => (
-                <p key={i}>{paragraph}</p>
-              ))
-            ) : (
-              <>
-                {post.content.split("\n").slice(0, 2).map((paragraph, i) => (
-                  <p key={i}>{paragraph}</p>
-                ))}
+          {session?.user ? (
+            <PostContent
+              content={post.content}
+              images={post.images}
+            />
+          ) : (
+            <div className="space-y-4">
+              <div className="space-y-3 text-sm leading-7 text-foreground md:text-base">
+                {previewLines.length > 0 ? (
+                  previewLines.slice(0, 3).map((line, index) => <p key={index}>{line}</p>)
+                ) : (
+                  <p className="text-muted-foreground">此帖包含图片，登录后查看完整内容。</p>
+                )}
                 <div className="relative">
                   <p className="line-clamp-2 text-muted-foreground/60">
-                    {post.content.split("\n").slice(2, 4).join(" ")}
+                    {previewLines.slice(3).join(" ")}
                   </p>
                   <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-b from-transparent to-background" />
                 </div>
-              </>
-            )}
-          </div>
-          {!session?.user && (
-            <div className="mt-2">
+              </div>
               <div className="border border-dashed border-border/60 bg-muted/20 px-5 py-4 text-sm text-muted-foreground">
-                <span className="font-medium text-foreground">▪ 后续为登录内容</span>
+                <span className="font-medium text-foreground">后续为登录内容</span>
                 <span className="mx-2">·</span>
-                完整收录：{post.title}
+                完整阅读：{post.title}
               </div>
               <LoginGate />
             </div>
@@ -170,9 +187,7 @@ export default async function PostPage({ params }: PostPageProps) {
       <Separator className="my-8" />
 
       <section className="animate-slide-up">
-        <h2 className="section-label">
-          回复 ({post._count.replies})
-        </h2>
+        <h2 className="section-label">回复 ({post._count.replies})</h2>
         <div className="mt-4">
           <ReplyList replies={replies} postId={post.id} />
         </div>
@@ -186,21 +201,21 @@ export default async function PostPage({ params }: PostPageProps) {
         <section className="mt-12 border-t border-border pt-8">
           <h2 className="section-label">相关推荐</h2>
           <div className="mt-4 border-t border-border">
-            {relatedPosts.map((rp) => (
+            {relatedPosts.map((relatedPost) => (
               <Link
-                key={rp.id}
-                href={`/forum/post/${rp.id}`}
+                key={relatedPost.id}
+                href={`/forum/post/${relatedPost.id}`}
                 className="group flex items-center gap-4 border-b border-border py-4 transition-colors hover:bg-muted/30"
               >
                 <span className="text-xs text-muted-foreground">
-                  {rp.section.icon} {rp.section.name}
+                  {relatedPost.section.icon} {relatedPost.section.name}
                 </span>
                 <span className="flex-1 truncate text-sm text-foreground">
-                  {rp.title}
+                  {relatedPost.title}
                 </span>
                 <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                   <MessageSquare className="h-3.5 w-3.5" />
-                  {rp._count.replies}
+                  {relatedPost._count.replies}
                 </span>
               </Link>
             ))}

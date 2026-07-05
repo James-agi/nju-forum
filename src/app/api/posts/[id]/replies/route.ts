@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth-utils";
+import {
+  encodePostContent,
+  normalizePostContentFormat,
+} from "@/lib/forum/content-format";
 
 export async function GET(
   req: Request,
@@ -47,7 +51,10 @@ export async function POST(
       return NextResponse.json({ error: "账号已被封禁" }, { status: 403 });
     }
 
-    const { content, parentId } = await req.json();
+    const payload = await req.json();
+    const content = typeof payload?.content === "string" ? payload.content : "";
+    const parentId = typeof payload?.parentId === "string" ? payload.parentId : null;
+    const contentFormat = normalizePostContentFormat(payload?.contentFormat);
 
     if (!content?.trim()) {
       return NextResponse.json({ error: "回复内容不能为空" }, { status: 400 });
@@ -67,10 +74,10 @@ export async function POST(
 
     const reply = await db.reply.create({
       data: {
-        content: content.trim(),
+        content: encodePostContent(content.trim(), contentFormat),
         authorId: session.user.id,
         postId: params.id,
-        parentId: parentId || null,
+        parentId,
       },
       include: {
         author: { select: { id: true, name: true, avatar: true } },

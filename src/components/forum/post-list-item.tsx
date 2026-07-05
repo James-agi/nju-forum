@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Eye, Heart, MessageSquare, Pin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { getPostTextPreview } from "@/lib/forum/post-preview";
 
 interface PostListItemProps {
   post: {
@@ -31,7 +32,7 @@ interface PostListItemProps {
 }
 
 function getPreview(content: string) {
-  const compact = content.replace(/\s+/g, " ").trim();
+  const compact = getPostTextPreview(content, 4).replace(/\s+/g, " ").trim();
   if (compact.length <= 120) return compact;
   return `${compact.slice(0, 120)}...`;
 }

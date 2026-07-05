@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MessageSquare } from "lucide-react";
+import { PostContent } from "@/components/forum/post-content";
 import { ReplyForm } from "./reply-form";
 
 interface Reply {
@@ -43,7 +44,7 @@ function ReplyItem({ reply, postId, depth = 0 }: { reply: Reply; postId: string;
               {new Date(reply.createdAt).toLocaleString("zh-CN")}
             </span>
           </div>
-          <p className="text-sm whitespace-pre-wrap">{reply.content}</p>
+          <PostContent content={reply.content} className="text-sm" />
           <Button
             variant="ghost"
             size="sm"
