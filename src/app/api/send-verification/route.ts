@@ -3,12 +3,12 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { db } from "@/lib/db";
 
-const NJU_DOMAINS = ["@nju.edu.cn", "@smail.nju.edu.cn"];
 const SUCCESS_MESSAGE = "验证码已发送";
 const IP_WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_IP_WINDOW = 5;
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const ipBuckets = new Map<string, { count: number; resetAt: number }>();
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {
   try {
@@ -21,11 +21,8 @@ export async function POST(req: Request) {
 
     const email = rawEmail.trim().toLowerCase();
 
-    if (!NJU_DOMAINS.some((domain) => email.endsWith(domain))) {
-      return NextResponse.json(
-        { error: "必须使用南大邮箱 (@nju.edu.cn 或 @smail.nju.edu.cn)" },
-        { status: 400 }
-      );
+    if (!EMAIL_PATTERN.test(email)) {
+      return NextResponse.json({ error: "请输入有效的邮箱地址" }, { status: 400 });
     }
 
     const clientIp =

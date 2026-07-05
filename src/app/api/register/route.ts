@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hash } from "bcryptjs";
 import { db } from "@/lib/db";
 
-const NJU_DOMAINS = ["@nju.edu.cn", "@smail.nju.edu.cn"];
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request) {
   try {
@@ -18,11 +18,8 @@ export async function POST(req: Request) {
     const email = rawEmail.trim().toLowerCase();
     const name = rawName.trim();
 
-    if (!NJU_DOMAINS.some((domain) => email.endsWith(domain))) {
-      return NextResponse.json(
-        { error: "必须使用南大邮箱 (@nju.edu.cn 或 @smail.nju.edu.cn)" },
-        { status: 400 }
-      );
+    if (!EMAIL_PATTERN.test(email)) {
+      return NextResponse.json({ error: "请输入有效的邮箱地址" }, { status: 400 });
     }
 
     if (name.length < 2 || name.length > 20) {

@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 export const loginSchema = z.object({
-  email: z.string().email("请输入有效的邮箱地址").endsWith("@nju.edu.cn", "必须使用南大邮箱 @nju.edu.cn"),
+  email: z.string().email("请输入有效的邮箱地址"),
   password: z.string().min(6, "密码至少6位"),
 });
 
 export const registerSchema = z.object({
-  email: z.string().email("请输入有效的邮箱地址").endsWith("@nju.edu.cn", "必须使用南大邮箱 @nju.edu.cn"),
+  email: z.string().email("请输入有效的邮箱地址"),
   name: z.string().min(2, "昵称至少2个字符").max(20, "昵称最多20个字符"),
   password: z.string().min(6, "密码至少6位"),
   confirmPassword: z.string().min(6, "密码至少6位"),

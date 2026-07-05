@@ -20,7 +20,7 @@ function ParticleBackground() {
     if (!ctx) return;
 
     let animId: number;
-    let particles: { x: number; y: number; vx: number; vy: number; size: number; alpha: number }[] = [];
+    const particles: { x: number; y: number; vx: number; vy: number; size: number; alpha: number }[] = [];
 
     const isDark = () => document.documentElement.classList.contains("dark");
 
@@ -141,7 +141,7 @@ export default function LoginPage() {
             <BookOpen className="h-6 w-6 text-foreground" />
           </div>
           <CardTitle className="text-2xl">登录知南</CardTitle>
-          <CardDescription>使用南大邮箱登录</CardDescription>
+          <CardDescription>推荐使用南大邮箱登录</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -160,7 +160,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="your@nju.edu.cn"
+                placeholder="your@nju.edu.cn / your@smail.nju.edu.cn"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

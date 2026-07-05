@@ -9,8 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BookOpen } from "lucide-react";
 
-const NJU_DOMAINS = ["@nju.edu.cn", "@smail.nju.edu.cn"];
-
 export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
@@ -37,7 +35,7 @@ export default function RegisterPage() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const isNjuEmail = (email: string) => NJU_DOMAINS.some((domain) => email.endsWith(domain));
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   const handleSendCode = async () => {
     setError("");
@@ -48,8 +46,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!isNjuEmail(form.email)) {
-      setError("必须使用南大邮箱 (@nju.edu.cn 或 @smail.nju.edu.cn)");
+    if (!isValidEmail(form.email)) {
+      setError("请输入有效的邮箱地址");
       return;
     }
 
@@ -89,8 +87,8 @@ export default function RegisterPage() {
       return;
     }
 
-    if (!isNjuEmail(form.email)) {
-      setError("必须使用南大邮箱 (@nju.edu.cn 或 @smail.nju.edu.cn)");
+    if (!isValidEmail(form.email)) {
+      setError("请输入有效的邮箱地址");
       return;
     }
 
@@ -130,7 +128,7 @@ export default function RegisterPage() {
             <BookOpen className="h-6 w-6 text-foreground" />
           </div>
           <CardTitle className="text-2xl">注册知南</CardTitle>
-          <CardDescription>仅限 @nju.edu.cn 或 @smail.nju.edu.cn 邮箱</CardDescription>
+          <CardDescription>推荐使用 @nju.edu.cn 或 @smail.nju.edu.cn 邮箱</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
