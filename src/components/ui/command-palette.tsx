@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Hash, Sun, Moon, PenSquare, User, X } from "lucide-react";
+import { Search, Hash, Sun, Moon, PenSquare, User } from "lucide-react";
 
 interface CommandItem {
   id: string;
@@ -20,7 +20,7 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(false);
   useEffect(() => {
     setIsDark(document.documentElement.classList.contains("dark"));
   }, [open]);
