@@ -6,11 +6,11 @@
 
 - 本地仓库远端：`https://github.com/James-agi/nju-forum.git`
 - 当前本地分支：`001-nju-knowledge-p0`
-- 本地分支比 GitHub 远端分支领先 15 个提交。
+- 本地分支已推送到 GitHub，当前与远端同名分支对齐。
 - 本地仍有多处未提交改动和未追踪文件。
 - 服务器目录 `/var/www/njuknow` 当前不是 Git 仓库。
 - 服务器上存在运行期文件：`.env`、`.next`、`node_modules`、`.env.bak-*`、`.codex-backups/`。
-- 服务器上存在上传资源目录，例如 `public/knowledge-images/`，这些目录被 `.gitignore` 忽略，不应直接依赖 GitHub 管理。
+- 服务器上存在上传资源目录，例如 `public/knowledge-images/` 和 `public/forum-images/`，这些目录被 `.gitignore` 忽略，不应直接依赖 GitHub 管理。
 
 ## 推荐方案
 
