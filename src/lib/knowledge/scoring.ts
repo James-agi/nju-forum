@@ -5,6 +5,7 @@ export function isSpec(t: string): boolean {
   const n = t.toLowerCase();
   if (GENERIC.has(n)) return false;
   if (SPEC.has(n)) return true;
+  if (/[\u3400-\u9fff]/.test(n) && n.length >= 2) return true;
   if (/^[a-z0-9]{2,}$/i.test(n)) return true;
   return n.length >= 3;
 }
