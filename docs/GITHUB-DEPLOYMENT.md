@@ -8,10 +8,11 @@
 - 当前本地分支：`001-nju-knowledge-p0`
 - 本地分支已推送到 GitHub，并应在部署前保持与远端同名分支对齐。
 - 当前线上 PM2 运行目录：`/var/www/njuknow-releases/a3ea602`
-- 当前线上代码版本：`c37af0d12960039fbfd2e65521a0f37f1dc9fc24`
+- 当前线上代码版本：`7143a71`
 - 旧目录 `/var/www/njuknow` 仍保留，用于保存旧部署和部分共享静态资源。
 - 生产配置 `.env` 只保存在服务器，不提交到 GitHub。
-- 服务器数据库的 `_prisma_migrations` 表目前不存在，但部分新字段已经手工补齐；不要默认自动执行 Prisma migration。
+- 服务器数据库的 `_prisma_migrations` 历史已经补齐，`prisma migrate status` 已显示最新；但生产迁移仍默认关闭，涉及数据库结构变更时必须单独备份和确认。
+- 服务器已经配置 2G swap，用于降低小内存服务器构建时卡死的风险。
 
 ## 推荐方案
 
@@ -30,7 +31,7 @@
 -> 提交并推送到 GitHub
 -> SSH 到服务器
 -> 运行 scripts/deploy-production.sh
--> 服务器拉取 GitHub 最新代码、安装依赖、生成 Prisma client、构建、重启 PM2、做本机健康检查
+-> 服务器创建新的隔离 release 目录、安装依赖、生成 Prisma client、构建、临时端口自检、切换 PM2、做本机健康检查
 ```
 
 ## 部署前必须确认
@@ -47,13 +48,15 @@
 
 ```bash
 cd /var/www/njuknow-releases/a3ea602
-APP_DIR=/var/www/njuknow-releases/a3ea602 bash scripts/deploy-production.sh
+bash scripts/deploy-production.sh
 ```
+
+脚本会在 `/var/www/njuknow-releases/` 下创建一个新的 release 目录。只有依赖安装、Prisma client 生成、Next.js 构建和临时端口自检都成功后，才会把 PM2 切到新目录。这样即使部署中途失败，当前正在运行的网站目录也不会被半成品 `node_modules` 污染。
 
 默认不会执行数据库迁移。只有在已经确认生产数据库 migration 状态安全后，才允许这样运行：
 
 ```bash
-APP_DIR=/var/www/njuknow-releases/a3ea602 RUN_DB_MIGRATIONS=1 bash scripts/deploy-production.sh
+RUN_DB_MIGRATIONS=1 bash scripts/deploy-production.sh
 ```
 
 脚本常用变量：
@@ -64,14 +67,18 @@ DEPLOY_BRANCH=001-nju-knowledge-p0
 PM2_APP=njuknow
 PORT=3000
 APP_HOST=0.0.0.0
+HEALTH_PORT=3100
 RUN_DB_MIGRATIONS=0
+RELEASES_DIR=/var/www/njuknow-releases
+SHARED_DIR=/var/www/njuknow
+PM2_USE_SUDO=auto
 ```
 
 ## 线上共享资源
 
 - `public/knowledge-images` 当前软链接到 `/var/www/njuknow/public/knowledge-images`。
 - `public/pdfs` 当前软链接到 `/var/www/njuknow/public/pdfs`。
-- `public/forum-images` 还需要补成共享目录或软链接，否则用户上传的论坛图片会写入当前 release 目录，不利于后续发布。
+- `public/forum-images` 当前软链接到 `/var/www/njuknow/public/forum-images`。
 - 长期建议把图片、PDF 迁移到对象存储，例如 OSS。
 
 ## 不能提交到 GitHub 的内容
