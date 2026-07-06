@@ -1,0 +1,1 @@
+ALTER TABLE "KnowledgeCard" ADD COLUMN IF NOT EXISTS "sourceUrls" TEXT;
