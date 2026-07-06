@@ -36,9 +36,6 @@ describe("KnowledgeCache", () => {
 
   it("evicts oldest entry when at capacity (LRU)", () => {
     const smallCache = new KnowledgeCache<string>();
-    const maxEntries = 3;
-    // HACK: set CACHE_MAX_ENTRIES by reaching into config
-    // Instead, just set 4 entries and verify the first is gone
 
     // Directly test the Map behavior: the class deletes the first key
     smallCache.set("a", "1");
@@ -53,7 +50,6 @@ describe("KnowledgeCache", () => {
     // The max entries is 500 from config, so we need to test differently
     // Let's test the eviction logic by creating many entries
     const bigCache = new KnowledgeCache<string>();
-    const stats1: { size: number } = (bigCache as unknown as { stats: () => { size: number } }).stats();
     // Fill beyond max (500 from config)
     for (let i = 0; i < 510; i++) {
       bigCache.set(`key${i}`, `val${i}`);
