@@ -122,21 +122,26 @@ export interface KnowledgeGapDTO {
   updatedAt: string;
 }
 
+export interface ConversationInfo {
+  conversationId?: string;
+  turnIndex?: number;
+}
+
 export type AskResponse =
-  | {
+  | (ConversationInfo & {
       status: "ANSWERED";
       questionId: string;
       answer: string;
       citations: CitationDTO[];
-    }
-  | {
+    })
+  | (ConversationInfo & {
       status: "GAP_RECORDED";
       questionId: string;
       gapId: string;
       message: string;
-    }
-  | {
+    })
+  | (ConversationInfo & {
       status: "OUT_OF_SCOPE";
       questionId: string;
       message: string;
-    };
+    });

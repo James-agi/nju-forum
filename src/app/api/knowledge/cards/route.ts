@@ -12,6 +12,8 @@ import {
   VERIFICATION_STATUSES,
   type KnowledgeCardDTO,
 } from "@/lib/knowledge/types";
+import { computeAndStoreEmbedding } from "@/lib/knowledge/embedding-refresh";
+import { answerCache } from "@/lib/knowledge/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +141,11 @@ export async function POST(req: Request) {
         createdById: authz.user.id,
       },
     });
+
+    computeAndStoreEmbedding(card.id, card.summary, card.body, card.domainTag)
+      .catch((err) => console.warn("[embedding] async compute failed:", err));
+
+    answerCache.invalidateAll();
 
     return NextResponse.json(toCardDTO(card));
   } catch (error) {

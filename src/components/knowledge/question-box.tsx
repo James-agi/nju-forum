@@ -37,6 +37,7 @@ export function QuestionBox() {
   const [answer, setAnswer] = useState<AskResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
 
   const askQuestion = async () => {
     const trimmedQuestion = question.trim();
@@ -50,13 +51,20 @@ export function QuestionBox() {
       const res = await fetch("/api/knowledge/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: trimmedQuestion }),
+        body: JSON.stringify({
+          question: trimmedQuestion,
+          ...(conversationId ? { conversationId } : {}),
+        }),
       });
       const data = await res.json();
 
       if (!res.ok) {
         setError(data.error || "提问失败");
         return;
+      }
+
+      if (data.conversationId) {
+        setConversationId(data.conversationId);
       }
 
       setAnswer(data);
@@ -100,6 +108,27 @@ export function QuestionBox() {
           {error && <p className="text-sm text-destructive">{error}</p>}
         </CardContent>
       </Card>
+
+      {loading && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">回答</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="h-4 w-full animate-pulse rounded bg-muted" />
+              <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+              <div className="h-4 w-1/2 animate-pulse rounded bg-muted" />
+            </div>
+            <div className="space-y-2">
+              <div className="h-3 w-24 animate-pulse rounded bg-muted" />
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-20 animate-pulse rounded-md border bg-muted" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {answer?.status === "ANSWERED" && (
         <Card>

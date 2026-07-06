@@ -95,7 +95,7 @@ model Favorite {
 }
 
 model KnowledgeCard {
-  id                 String              @id @default(cuid())
+  id                 String                  @id @default(cuid())
   summary            String
   body               String
   sourceUrl          String?
@@ -105,21 +105,35 @@ model KnowledgeCard {
   domainTag          String
   createdById        String
   updatedById        String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
   archivedAt         DateTime?
   sourceExcerpt      String?
   sourceUrls         String?
-  createdBy          User                @relation("KnowledgeCardCreatedBy", fields: [createdById], references: [id])
-  updatedBy          User?               @relation("KnowledgeCardUpdatedBy", fields: [updatedById], references: [id])
+  createdBy          User                    @relation("KnowledgeCardCreatedBy", fields: [createdById], references: [id])
+  updatedBy          User?                   @relation("KnowledgeCardUpdatedBy", fields: [updatedById], references: [id])
   citations          KnowledgeCitation[]
-  resolvedGaps       KnowledgeGap[]      @relation("KnowledgeGapLinkedCard")
+  resolvedGaps       KnowledgeGap[]          @relation("KnowledgeGapLinkedCard")
+  revisions          KnowledgeCardRevision[]
 
   @@index([domainTag])
   @@index([verificationStatus])
   @@index([sourceType])
   @@index([archivedAt])
   @@index([createdById])
+}
+
+model KnowledgeCardRevision {
+  id        String          @id @default(cuid())
+  cardId    String
+  summary   String
+  body      String
+  changedBy String
+  createdAt DateTime        @default(now())
+  card      KnowledgeCard   @relation(fields: [cardId], references: [id])
+
+  @@index([cardId])
+  @@index([createdAt])
 }
 
 model KnowledgeQuestion {
@@ -131,6 +145,7 @@ model KnowledgeQuestion {
   createdAt             DateTime                  @default(now())
   conversationId        String?
   turnIndex             Int                       @default(0)
+  trace                 String?
   answer                KnowledgeAnswer?
   feedbacks             KnowledgeAnswerFeedback[] @relation("KnowledgeAnswerFeedbackQuestion")
   gap                   KnowledgeGap?
@@ -161,6 +176,7 @@ model KnowledgeAnswer {
   id         String              @id @default(cuid())
   questionId String              @unique
   answerText String
+  answerMode String              @default("FALLBACK")
   createdAt  DateTime            @default(now())
   question   KnowledgeQuestion   @relation(fields: [questionId], references: [id], onDelete: Cascade)
   citations  KnowledgeCitation[]

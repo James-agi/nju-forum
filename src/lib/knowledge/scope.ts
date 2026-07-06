@@ -1,4 +1,5 @@
 import { normalizeQuestionText } from "@/lib/knowledge/validation";
+import { NJU_SIGNALS } from "@/lib/knowledge/lexicon";
 
 interface ScopeRule {
   code: string;
@@ -29,18 +30,17 @@ export function classifyP0Scope(question: string): ScopeClassification {
   const normalized = normalizeQuestionText(question);
   for (const rule of NON_GOAL_RULES) {
     if (rule.keywords.some((keyword) => normalized.includes(keyword.toLowerCase()))) {
+      // 白名单兜底：含校园信号词的不误杀，放行进检索
+      if (NJU_SIGNALS.some((kw) => normalized.includes(kw.toLowerCase()))) {
+        return { inScope: true };
+      }
       return { inScope: false, code: rule.code, label: rule.label, message: `这个请求属于「${rule.label}」，不在本知识库的收录范围内。` };
     }
   }
   return { inScope: true };
 }
 
-const NJU_SIGNALS = [
-  "南大", "南京大学", "鼓楼", "仙林", "浦口", "苏州", "校区",
-  "专业", "选课", "转专业", "保研", "宿舍", "社团", "书院", "大类",
-  "学分", "绩点", "课程", "学工", "三三制", "图书馆", "VPN", "辅修",
-  "交换", "军训", "食堂", "奖学金", "助学金", "绩点",
-];
+
 
 export function classifyNoResult(question: string): "GAP_RECORDED" | "OUT_OF_SCOPE" {
   const normalized = question.toLowerCase();

@@ -6,6 +6,8 @@ import {
   formatValidationError,
 } from "@/lib/knowledge/validation";
 import type { KnowledgeCardDTO } from "@/lib/knowledge/types";
+import { computeAndStoreEmbedding } from "@/lib/knowledge/embedding-refresh";
+import { answerCache } from "@/lib/knowledge/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +91,11 @@ export async function PATCH(
     const hasSourceUrl = Object.prototype.hasOwnProperty.call(payload, "sourceUrl");
     const { archive, sourceUrls, ...fields } = parsed.data;
 
+    const before = await db.knowledgeCard.findUnique({
+      where: { id: params.id },
+      select: { summary: true, body: true, domainTag: true },
+    });
+
     const card = await db.knowledgeCard.update({
       where: { id: params.id },
       data: {
@@ -100,6 +107,23 @@ export async function PATCH(
           archive === true ? new Date() : archive === false ? null : undefined,
       },
     });
+
+    // body 或 summary 变化时重算 embedding + 记录修订
+    if (fields.body !== undefined || fields.summary !== undefined) {
+      computeAndStoreEmbedding(card.id, card.summary, card.body, card.domainTag)
+        .catch((err) => console.warn("[embedding] async recompute failed:", err));
+
+      db.knowledgeCardRevision.create({
+        data: {
+          cardId: card.id,
+          summary: before?.summary ?? "",
+          body: before?.body ?? "",
+          changedBy: authz.user.id,
+        },
+      }).catch((err) => console.warn("[revision] create failed:", err));
+    }
+
+    answerCache.invalidateAll();
 
     return NextResponse.json(toCardDTO(card));
   } catch (error) {

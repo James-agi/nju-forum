@@ -3,6 +3,7 @@ import {
   GAP_TYPES,
   SOURCE_TYPES,
   VERIFICATION_STATUSES,
+  KNOWLEDGE_DOMAIN_TAGS,
 } from "@/lib/knowledge/types";
 
 const trimmedRequired = (name: string, max = 2000) =>
@@ -53,7 +54,9 @@ export const cardCreateSchema = z.object({
   sourceDescription: trimmedRequired("来源说明", 500),
   sourceType: z.enum(SOURCE_TYPES),
   verificationStatus: z.enum(VERIFICATION_STATUSES),
-  domainTag: trimmedRequired("领域标签", 80),
+  domainTag: z.enum(KNOWLEDGE_DOMAIN_TAGS, {
+    error: `领域标签必须是 ${KNOWLEDGE_DOMAIN_TAGS.join("、")} 之一`,
+  }),
   action: z.enum(["create", "merge"]).optional(),
   mergeWithSummary: z.string().trim().max(200).nullish(),
 });
@@ -64,6 +67,7 @@ export const cardUpdateSchema = cardCreateSchema.partial().extend({
 
 export const askRequestSchema = z.object({
   question: trimmedRequired("问题", 500).min(2, "问题至少需要 2 个字符"),
+  conversationId: z.string().optional(),
 });
 
 export const gapUpdateSchema = z

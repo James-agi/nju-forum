@@ -7,6 +7,8 @@ import { cardCreateSchema, formatValidationError } from "@/lib/knowledge/validat
 import { readCardBatch } from "@/lib/knowledge/card-batch/storage";
 import type { CardBatchImportResponse } from "@/lib/knowledge/card-batch/types";
 import { startWorkflowIterationWebRun } from "@/lib/knowledge/card-batch/web-runner";
+import { computeAndStoreEmbedding } from "@/lib/knowledge/embedding-refresh";
+import { answerCache } from "@/lib/knowledge/cache";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,8 +39,10 @@ export async function POST(req: Request) {
     ];
     let created = 0;
     let merged = 0;
-    const skipped = 0;
+    let skipped = 0;
     let failed = 0;
+
+    const pendingEmbeddings: Array<{ id: string; summary: string; body: string; domainTag: string }> = [];
 
     // 在事务中执行全部 DB 操作，失败时整体回滚
     await db.$transaction(async (tx) => {
@@ -94,17 +98,37 @@ export async function POST(req: Request) {
               updateData.domainTag = parsedCard.data.domainTag;
             }
 
-            await tx.knowledgeCard.update({
+            const mergedCard = await tx.knowledgeCard.update({
               where: { id: existing.id },
               data: updateData,
+              select: { id: true, summary: true, body: true, domainTag: true },
             });
             merged += 1;
+            pendingEmbeddings.push({
+              id: mergedCard.id,
+              summary: mergedCard.summary,
+              body: mergedCard.body,
+              domainTag: mergedCard.domainTag,
+            });
             reportLines.push(
               `| ${index + 1} | 合并 | ${parsedCard.data.summary} | 合并到「${parsedCard.data.mergeWithSummary}」 |`
             );
             continue;
           }
           // 找不到目标卡片 → 降级为新建
+        }
+
+        // 去重：summary 完全匹配已有未归档卡片则跳过
+        const duplicate = await tx.knowledgeCard.findFirst({
+          where: { summary: parsedCard.data.summary, archivedAt: null },
+          select: { id: true },
+        });
+        if (duplicate) {
+          skipped += 1;
+          reportLines.push(
+            `| ${index + 1} | 跳过 | ${parsedCard.data.summary} | 已存在相同 summary 的卡片 |`
+          );
+          continue;
         }
 
         // 新建模式 — 只取 Prisma 需要的字段，丢弃 action / mergeWithSummary
@@ -131,7 +155,7 @@ export async function POST(req: Request) {
         const sourceUrlsFinal = cardFields.sourceUrls
           || (cardFields.sourceUrl ? [cardFields.sourceUrl] : null);
 
-        await tx.knowledgeCard.create({
+        const newCard = await tx.knowledgeCard.create({
           data: {
             ...cardFields,
             sourceUrls: sourceUrlsFinal ? JSON.stringify(sourceUrlsFinal) : null,
@@ -139,17 +163,31 @@ export async function POST(req: Request) {
             sourceUrl: cardFields.sourceUrl ?? null,
             createdById: authz.user.id,
           },
+          select: { id: true, summary: true, body: true, domainTag: true },
         });
 
         created += 1;
+        pendingEmbeddings.push({
+          id: newCard.id,
+          summary: newCard.summary,
+          body: newCard.body,
+          domainTag: newCard.domainTag,
+        });
         reportLines.push(
           `| ${index + 1} | 创建 | ${parsedCard.data.summary} | NEEDS_REVIEW |`
         );
       }
     });
 
+    for (const card of pendingEmbeddings) {
+      computeAndStoreEmbedding(card.id, card.summary, card.body, card.domainTag)
+        .catch((err) => console.warn(`[embedding] incremental compute failed for ${card.id}:`, err));
+    }
+
     await writeFile(reportPath, `${reportLines.join("\n")}\n`, "utf8");
     await startWorkflowIterationWebRun(batch.id);
+
+    answerCache.invalidateAll();
 
     const response: CardBatchImportResponse = {
       created,
