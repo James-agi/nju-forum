@@ -1,6 +1,6 @@
 ---
 title: Phase 0-2 实现总结
-status: 完成 2026-06-15
+status: 过时（知识问答已全盘重构，见 docs/KNOWLEDGE-ARCHITECTURE.md）
 audience: 作者本人
 ---
 

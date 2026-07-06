@@ -81,6 +81,7 @@ codex-skills/
 # 一次性脚本 / 临时文件
 __test_write.txt
 PROJECT.pdf
+PROJECT.md
 prisma/seed-posts.ts
 scripts/card-scan.ts
 scripts/debug-*.ts

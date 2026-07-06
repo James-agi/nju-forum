@@ -56,7 +56,7 @@ CREATE INDEX "KnowledgeCard_embedding_idx" ON "KnowledgeCard"
 
 ```bash
 # .env 新增
-KNOWLEDGE_EMBEDDING_API_KEY="sk-uwqlujzqcoixnommhhvyarinysgjxeyxeybfdbqgjrzkhhxr"
+KNOWLEDGE_EMBEDDING_API_KEY="sk-your-key-here"
 KNOWLEDGE_EMBEDDING_BASE_URL="https://api.siliconflow.cn/v1"
 KNOWLEDGE_EMBEDDING_MODEL="BAAI/bge-m3"
 KNOWLEDGE_EMBEDDING_DIM=1024
