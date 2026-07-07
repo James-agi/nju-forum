@@ -6,6 +6,19 @@ import {
   normalizePostContentFormat,
 } from "@/lib/forum/content-format";
 
+const MAX_REPLY_IMAGES = 6;
+const FORUM_IMAGE_PATTERN = /^\/forum-images\/[A-Za-z0-9._~/%-]+$/;
+
+function normalizeImages(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return Array.from(new Set(value))
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => FORUM_IMAGE_PATTERN.test(item))
+    .slice(0, MAX_REPLY_IMAGES);
+}
+
 export async function GET(
   req: Request,
   { params }: { params: { id: string } }
@@ -55,9 +68,10 @@ export async function POST(
     const content = typeof payload?.content === "string" ? payload.content : "";
     const parentId = typeof payload?.parentId === "string" ? payload.parentId : null;
     const contentFormat = normalizePostContentFormat(payload?.contentFormat);
+    const images = contentFormat === "plain" ? normalizeImages(payload?.images) : [];
 
-    if (!content?.trim()) {
-      return NextResponse.json({ error: "回复内容不能为空" }, { status: 400 });
+    if (!content?.trim() && images.length === 0) {
+      return NextResponse.json({ error: "请输入回复内容或添加图片" }, { status: 400 });
     }
 
     const post = await db.post.findUnique({ where: { id: params.id } });
@@ -75,6 +89,7 @@ export async function POST(
     const reply = await db.reply.create({
       data: {
         content: encodePostContent(content.trim(), contentFormat),
+        images,
         authorId: session.user.id,
         postId: params.id,
         parentId,

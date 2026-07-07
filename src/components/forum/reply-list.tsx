@@ -11,6 +11,7 @@ import { ReplyForm } from "./reply-form";
 interface Reply {
   id: string;
   content: string;
+  images: string[];
   createdAt: Date;
   author: {
     id: string;
@@ -45,7 +46,7 @@ function ReplyItem({ reply, postId, depth = 0 }: { reply: Reply; postId: string;
               {new Date(reply.createdAt).toLocaleString("zh-CN")}
             </span>
           </div>
-          <PostContent content={reply.content} className="text-sm" />
+          <PostContent content={reply.content} images={reply.images} className="text-sm" />
           <Button
             variant="ghost"
             size="sm"

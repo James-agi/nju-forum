@@ -128,7 +128,9 @@ export function ReplyForm({
 
       const uploadedImages = (data.images ?? []) as UploadedImage[];
       setImages((prev) => [...prev, ...uploadedImages]);
-      insertMarkdownAtCursor(buildMarkdownImages(uploadedImages));
+      if (contentFormat === "markdown") {
+        insertMarkdownAtCursor(buildMarkdownImages(uploadedImages));
+      }
     } catch {
       setError("图片上传失败，请稍后再试");
     } finally {
@@ -144,7 +146,7 @@ export function ReplyForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() || !canReply) return;
+    if ((!content.trim() && images.length === 0) || !canReply) return;
 
     setLoading(true);
     setError("");
@@ -153,7 +155,12 @@ export function ReplyForm({
       const res = await fetch(`/api/posts/${postId}/replies`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, contentFormat, parentId }),
+        body: JSON.stringify({
+          content,
+          contentFormat,
+          parentId,
+          images: contentFormat === "plain" ? images.map((image) => image.url) : [],
+        }),
       });
 
       if (!res.ok) {
@@ -240,62 +247,66 @@ export function ReplyForm({
         )}
       </div>
 
-      {contentFormat === "markdown" && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">图片会插入到当前光标位置</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploadingImages || images.length >= MAX_IMAGES}
-            >
-              {uploadingImages ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <ImagePlus className="mr-2 h-4 w-4" />
-              )}
-              添加图片
-            </Button>
-          </div>
-          <Input
-            ref={fileInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-            multiple
-            className="hidden"
-            onChange={uploadImages}
-          />
-          {images.length > 0 && (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {images.map((image, index) => (
-                <div key={image.url} className="relative overflow-hidden rounded-md border bg-muted/30">
-                  <img
-                    src={image.url}
-                    alt={image.alt || `回复图片 ${index + 1}`}
-                    className="h-28 w-full object-contain"
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="icon"
-                    className="absolute right-2 top-2 h-7 w-7"
-                    onClick={() => removeImage(image.url)}
-                    aria-label="移除图片"
-                    title="移除图片"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-muted-foreground">
+            {contentFormat === "markdown" ? "图片会插入到当前光标位置" : "图片会显示在回复正文下方"}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingImages || images.length >= MAX_IMAGES}
+          >
+            {uploadingImages ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <ImagePlus className="mr-2 h-4 w-4" />
+            )}
+            添加图片
+          </Button>
         </div>
-      )}
+        <Input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+          multiple
+          className="hidden"
+          onChange={uploadImages}
+        />
+        {images.length > 0 && (
+          <div className="grid gap-2 sm:grid-cols-2">
+            {images.map((image, index) => (
+              <div key={image.url} className="relative overflow-hidden rounded-md border bg-muted/30">
+                <img
+                  src={image.url}
+                  alt={image.alt || `回复图片 ${index + 1}`}
+                  className="h-28 w-full object-contain"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="absolute right-2 top-2 h-7 w-7"
+                  onClick={() => removeImage(image.url)}
+                  aria-label="移除图片"
+                  title="移除图片"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex gap-2">
-        <Button type="submit" size="sm" disabled={loading || uploadingImages || !content.trim()}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={loading || uploadingImages || (!content.trim() && images.length === 0)}
+        >
           <MessageSquare className="mr-2 h-4 w-4" />
           {loading ? "发送中..." : "回复"}
         </Button>
