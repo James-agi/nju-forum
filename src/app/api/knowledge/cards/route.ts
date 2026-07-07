@@ -56,12 +56,12 @@ export async function GET(req: Request) {
     const domainTag = searchParams.get("domainTag")?.trim();
     const verificationStatus = searchParams.get("verificationStatus")?.trim();
 
-    const where: Prisma.KnowledgeCardWhereInput = {
+    const baseWhere: Prisma.KnowledgeCardWhereInput = {
       archivedAt: null,
     };
 
     if (q) {
-      where.OR = [
+      baseWhere.OR = [
         { summary: { contains: q, mode: "insensitive" } },
         { body: { contains: q, mode: "insensitive" } },
         { domainTag: { contains: q, mode: "insensitive" } },
@@ -70,9 +70,10 @@ export async function GET(req: Request) {
     }
 
     if (domainTag) {
-      where.domainTag = { contains: domainTag, mode: "insensitive" };
+      baseWhere.domainTag = { contains: domainTag, mode: "insensitive" };
     }
 
+    const where: Prisma.KnowledgeCardWhereInput = { ...baseWhere };
     if (
       verificationStatus &&
       VERIFICATION_STATUSES.includes(verificationStatus as (typeof VERIFICATION_STATUSES)[number])
@@ -80,7 +81,7 @@ export async function GET(req: Request) {
       where.verificationStatus = verificationStatus as (typeof VERIFICATION_STATUSES)[number];
     }
 
-    const [cards, total] = await Promise.all([
+    const [cards, total, groupedStatusCounts] = await Promise.all([
       db.knowledgeCard.findMany({
         where,
         orderBy: { updatedAt: "desc" },
@@ -88,7 +89,19 @@ export async function GET(req: Request) {
         take: limit,
       }),
       db.knowledgeCard.count({ where }),
+      db.knowledgeCard.groupBy({
+        by: ["verificationStatus"],
+        where: baseWhere,
+        _count: { _all: true },
+      }),
     ]);
+
+    const statusCounts = Object.fromEntries(
+      VERIFICATION_STATUSES.map((status) => [
+        status,
+        groupedStatusCounts.find((item) => item.verificationStatus === status)?._count._all ?? 0,
+      ])
+    );
 
     return NextResponse.json({
       cards: cards.map(toCardDTO),
@@ -98,6 +111,7 @@ export async function GET(req: Request) {
         total,
         totalPages: Math.ceil(total / limit),
       },
+      statusCounts,
     });
   } catch (error) {
     console.error("Error fetching knowledge cards:", error);

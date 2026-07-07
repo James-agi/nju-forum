@@ -29,7 +29,8 @@ type MarkdownBlock =
   | { type: "paragraph"; lines: string[] }
   | { type: "heading"; text: string; level: number }
   | { type: "ul"; items: string[] }
-  | { type: "ol"; items: string[] };
+  | { type: "ol"; items: string[] }
+  | { type: "table"; header: string[]; rows: string[][] };
 
 const LOCAL_IMAGE_MARKDOWN =
   /^!\[([^\]\n]*)\]\((\/knowledge-images\/[A-Za-z0-9._~/%-]+)\)$/;
@@ -41,6 +42,8 @@ const STRONG_PATTERN = /(\*\*|__)([^*_][\s\S]*?)\1/g;
 const HEADING_PATTERN = /^(#{1,4})\s+(.+)$/;
 const UNORDERED_LIST_PATTERN = /^\s*[-*]\s+(.+)$/;
 const ORDERED_LIST_PATTERN = /^\s*\d+[.)]\s+(.+)$/;
+const TABLE_SEPARATOR_PATTERN =
+  /^\s*\|?\s*:?-{1,}:?\s*(?:\|\s*:?-{1,}:?\s*)*\|?\s*$/;
 const MIN_IMAGE_ZOOM = 0.5;
 const MAX_IMAGE_ZOOM = 4;
 const IMAGE_ZOOM_STEP = 0.2;
@@ -175,14 +178,49 @@ function parseInlineLinks(text: string): InlineTextPart[] {
   return parts.length > 0 ? parts : [{ type: "text", text }];
 }
 
+function isTableRow(line: string): boolean {
+  return line.includes("|");
+}
+
+function splitTableRow(line: string): string[] {
+  const cells: string[] = [];
+  const trimmed = line.trim();
+  let current = "";
+
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const char = trimmed[i];
+    if (char === "\\" && trimmed[i + 1] === "|") {
+      current += "|";
+      i += 1;
+      continue;
+    }
+    if (char === "|") {
+      cells.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  cells.push(current);
+
+  // 去掉首尾外框竖线产生的空单元格
+  if (cells.length > 1 && cells[0].trim() === "") cells.shift();
+  if (cells.length > 1 && cells[cells.length - 1].trim() === "") cells.pop();
+
+  return cells.map((cell) => cell.trim());
+}
+
 function parseMarkdownBlocks(text: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = [];
   const paragraphLines: string[] = [];
   let listBlock: Extract<MarkdownBlock, { type: "ul" | "ol" }> | null = null;
+  const lines = text.split(/\r?\n/);
 
   const flushParagraph = () => {
-    const lines = paragraphLines.map((line) => line.trimEnd()).filter(Boolean);
-    if (lines.length > 0) blocks.push({ type: "paragraph", lines });
+    const collected = paragraphLines
+      .map((line) => line.trimEnd())
+      .filter(Boolean);
+    if (collected.length > 0) blocks.push({ type: "paragraph", lines: collected });
     paragraphLines.length = 0;
   };
 
@@ -193,8 +231,8 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
     listBlock = null;
   };
 
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trimEnd();
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trimEnd();
 
     if (!line.trim()) {
       flushParagraph();
@@ -211,6 +249,33 @@ function parseMarkdownBlocks(text: string): MarkdownBlock[] {
         level: Math.min(4, headingMatch[1].length),
         text: headingMatch[2].trim(),
       });
+      continue;
+    }
+
+    // 表格：当前行是表格行，且下一行是分隔行（|---|---|）
+    const nextLine = lines[index + 1];
+    if (
+      isTableRow(line) &&
+      nextLine !== undefined &&
+      isTableRow(nextLine) &&
+      TABLE_SEPARATOR_PATTERN.test(nextLine)
+    ) {
+      flushParagraph();
+      flushList();
+      const header = splitTableRow(line);
+      const rows: string[][] = [];
+      let cursor = index + 2;
+      while (
+        cursor < lines.length &&
+        lines[cursor].trim() &&
+        isTableRow(lines[cursor]) &&
+        !HEADING_PATTERN.test(lines[cursor])
+      ) {
+        rows.push(splitTableRow(lines[cursor]));
+        cursor += 1;
+      }
+      blocks.push({ type: "table", header, rows });
+      index = cursor - 1;
       continue;
     }
 
@@ -370,6 +435,41 @@ export function MarkdownText({
                 </li>
               ))}
             </ol>
+          );
+        }
+
+        if (block.type === "table") {
+          return (
+            <div key={index} className="overflow-x-auto">
+              <table className="w-full border-collapse text-left text-sm">
+                <thead>
+                  <tr>
+                    {block.header.map((cell, cellIndex) => (
+                      <th
+                        key={cellIndex}
+                        className="border border-border bg-muted/60 px-2 py-1 align-top font-semibold text-foreground"
+                      >
+                        <LinkifiedText text={cell} />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, rowIndex) => (
+                    <tr key={rowIndex}>
+                      {block.header.map((_, cellIndex) => (
+                        <td
+                          key={cellIndex}
+                          className="border border-border px-2 py-1 align-top"
+                        >
+                          <LinkifiedText text={row[cellIndex] ?? ""} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           );
         }
 
