@@ -12,7 +12,8 @@ import {
   formatValidationError,
   normalizeQuestionText,
 } from "@/lib/knowledge/validation";
-import type { AskResponse, CitationDTO } from "@/lib/knowledge/types";
+import type { AskResponse, CitationDTO, DirectCardDTO } from "@/lib/knowledge/types";
+import type { RetrievalResult } from "@/lib/knowledge/types-internal";
 import { TraceBuilder } from "@/lib/knowledge/trace";
 import { getOrCreateConversation, getConversationHistory } from "@/lib/knowledge/conversation";
 import { answerCache } from "@/lib/knowledge/cache";
@@ -24,6 +25,22 @@ const GAP_MESSAGE =
 
 const FEEDBACK_PROMPT =
   "（以上回答仅供参考。如果不符合你的预期，请提交反馈帮助我们改进。）";
+
+function toDirectCardDTO(result: RetrievalResult): DirectCardDTO {
+  return {
+    cardId: result.card.id,
+    summary: result.card.summary,
+    body: result.card.body,
+    sourceExcerpt: result.card.sourceExcerpt,
+    sourceDescription: result.card.sourceDescription,
+    sourceUrl: result.card.sourceUrl,
+    sourceType: result.card.sourceType,
+    verificationStatus: result.card.verificationStatus,
+    domainTag: result.card.domainTag,
+    score: result.score,
+    matchedTerms: result.matchedTerms,
+  };
+}
 
 export async function POST(req: Request) {
   const trace = new TraceBuilder();
@@ -53,15 +70,16 @@ export async function POST(req: Request) {
     }
 
     const questionText = parsed.data.question;
+    const responseMode = parsed.data.mode;
     const normalizedQuestion = normalizeQuestionText(questionText);
     trace.setNormalizedQuestion(normalizedQuestion);
 
-    // 多轮对话：登录用户获取/创建会话
+    // 多轮对话只用于总结回答；直接卡片模式不写入会话上下文。
     let conversationId: string | undefined;
     let turnIndex: number | undefined;
     let conversationHistory: Array<{ question: string; answer: string }> = [];
 
-    if (authz.user) {
+    if (authz.user && responseMode === "think") {
       const conv = await getOrCreateConversation(authz.user.id, parsed.data.conversationId);
       conversationId = conv.conversationId;
       turnIndex = conv.turnIndex;
@@ -105,7 +123,7 @@ export async function POST(req: Request) {
 
     // 单轮问答走缓存
     const cacheKey = normalizedQuestion;
-    if (!conversationId || turnIndex === 1) {
+    if (responseMode === "think" && (!conversationId || turnIndex === 1)) {
       const cached = answerCache.get(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached) as AskResponse & { status: "ANSWERED" };
@@ -113,9 +131,14 @@ export async function POST(req: Request) {
       }
     }
 
-    trace.mark("expansion");
-    const expandedTerms = await expandQueryTerms(questionText);
-    trace.setExpansion({ terms: expandedTerms, durationMs: trace.elapsedMs("expansion") });
+    let expandedTerms: string[] = [];
+    if (responseMode === "think") {
+      trace.mark("expansion");
+      expandedTerms = await expandQueryTerms(questionText);
+      trace.setExpansion({ terms: expandedTerms, durationMs: trace.elapsedMs("expansion") });
+    } else {
+      trace.setExpansion({ terms: [], durationMs: 0 });
+    }
 
     trace.mark("retrieval");
     const retrieval = await retrieveHybrid(questionText, 5, expandedTerms);
@@ -131,6 +154,29 @@ export async function POST(req: Request) {
       reason: evidence.reason,
       cardsCount: evidence.cards.length,
     });
+
+    if (responseMode === "cards" && retrieval.length > 0) {
+      trace.setAnswer({ durationMs: 0 });
+
+      const question = await db.knowledgeQuestion.create({
+        data: {
+          askerId: authz.user?.id ?? null,
+          originalText: questionText,
+          normalizedText: normalizedQuestion,
+          status: "ANSWERED",
+          trace: trace.toJSON(),
+        },
+      });
+
+      const response: AskResponse = {
+        status: "CARDS_FOUND",
+        questionId: question.id,
+        cards: retrieval.slice(0, 5).map(toDirectCardDTO),
+        message: "找到这些相关卡片，先把原始材料浮上来给你看。",
+      };
+
+      return NextResponse.json(response);
+    }
 
     if (!evidence.sufficient) {
       if (evidence.reason === "EMPTY") {
@@ -300,7 +346,7 @@ export async function POST(req: Request) {
       citations: citationResponse,
     };
 
-    if (!conversationId || turnIndex === 1) {
+    if (responseMode === "think" && (!conversationId || turnIndex === 1)) {
       answerCache.set(cacheKey, JSON.stringify(response));
     }
 

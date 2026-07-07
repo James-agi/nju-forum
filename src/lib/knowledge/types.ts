@@ -32,6 +32,11 @@ export const GAP_TYPES = [
   "POLICY_UNCLEAR",
 ] as const;
 
+export const KNOWLEDGE_ANSWER_MODES = [
+  "cards",
+  "think",
+] as const;
+
 export const KNOWLEDGE_DOMAIN_TAGS = [
   "新生入学",
   "三三制",
@@ -48,6 +53,7 @@ export type VerificationStatusValue = (typeof VERIFICATION_STATUSES)[number];
 export type QuestionStatusValue = (typeof QUESTION_STATUSES)[number];
 export type GapStatusValue = (typeof GAP_STATUSES)[number];
 export type GapTypeValue = (typeof GAP_TYPES)[number];
+export type KnowledgeAnswerModeValue = (typeof KNOWLEDGE_ANSWER_MODES)[number];
 
 export const SOURCE_TYPE_LABELS: Record<SourceTypeValue, string> = {
   OFFICIAL: "官方来源",
@@ -110,6 +116,20 @@ export interface CitationDTO {
   claimText: string;
 }
 
+export interface DirectCardDTO {
+  cardId: string;
+  summary: string;
+  body: string;
+  sourceExcerpt: string | null;
+  sourceDescription: string;
+  sourceUrl: string | null;
+  sourceType: SourceTypeValue;
+  verificationStatus: VerificationStatusValue;
+  domainTag: string;
+  score: number;
+  matchedTerms: string[];
+}
+
 export interface KnowledgeGapDTO {
   id: string;
   originalQuestion: string;
@@ -133,6 +153,12 @@ export type AskResponse =
       questionId: string;
       answer: string;
       citations: CitationDTO[];
+    })
+  | (ConversationInfo & {
+      status: "CARDS_FOUND";
+      questionId: string;
+      cards: DirectCardDTO[];
+      message: string;
     })
   | (ConversationInfo & {
       status: "GAP_RECORDED";

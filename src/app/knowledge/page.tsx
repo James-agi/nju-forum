@@ -3,7 +3,7 @@ import { QuestionBox } from "@/components/knowledge/question-box";
 
 export default async function KnowledgePage() {
   return (
-    <div className="container mx-auto max-w-3xl px-4 py-8">
+    <div className="container mx-auto max-w-5xl px-4 py-8">
       <div className="mb-8 animate-fade-in">
         <SectionLabel
           en="Knowledge · 知识问答"

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   GAP_TYPES,
+  KNOWLEDGE_ANSWER_MODES,
   SOURCE_TYPES,
   VERIFICATION_STATUSES,
   KNOWLEDGE_DOMAIN_TAGS,
@@ -68,6 +69,7 @@ export const cardUpdateSchema = cardCreateSchema.partial().extend({
 export const askRequestSchema = z.object({
   question: trimmedRequired("问题", 500).min(2, "问题至少需要 2 个字符"),
   conversationId: z.string().optional(),
+  mode: z.enum(KNOWLEDGE_ANSWER_MODES).default("think"),
 });
 
 export const gapUpdateSchema = z
