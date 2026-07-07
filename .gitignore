@@ -24,6 +24,7 @@
 /public/forum-images
 /public/knowledge-images
 /public/pdfs
+/public/avatars
 
 # debug
 *.log
@@ -77,6 +78,7 @@ projects/
 tools/
 codex-skills/
 .opencode/
+.claude/
 
 # 一次性脚本 / 临时文件
 __test_write.txt
@@ -103,3 +105,11 @@ agent-workflows/card-batch/.xdg-*/
 *disconnect())
 *console.log*
 *includes(*
+
+# fix-cards skill 写库前的整卡备份（随修卡累积，仅本地留存，不入库）
+.agents/skills/fix-cards/backups/
+
+# 本地视觉验收截图
+/card-*.png
+/list-*.png
+/section-*.png
