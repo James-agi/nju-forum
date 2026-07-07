@@ -63,8 +63,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-inter), "PingFang SC", "Microsoft YaHei",
-      "Noto Sans SC", sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
   }
 }
 
