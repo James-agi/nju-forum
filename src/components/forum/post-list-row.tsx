@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Heart, MessageSquare, Pin } from "lucide-react";
+import { Pin } from "lucide-react";
 import { getPostTextPreview } from "@/lib/forum/post-preview";
+import { PostStats } from "@/components/forum/post-stats";
 
 interface PostListRowProps {
   post: {
@@ -28,7 +29,7 @@ export function PostListRow({ post, index }: PostListRowProps) {
     <Link
       href={`/forum/post/${post.id}`}
       style={{ "--index": index } as React.CSSProperties}
-      className="animate-stagger group grid grid-cols-[2.5rem_1fr_auto] items-center gap-4 border-b border-border py-4 transition-colors hover:bg-muted/20 md:gap-6"
+      className="animate-stagger group grid grid-cols-[1.75rem_1fr] items-baseline gap-3 border-b border-border py-3 transition-colors hover:bg-muted/20 md:grid-cols-[2.5rem_1fr_auto] md:items-center md:gap-6 md:py-4"
     >
       <span className="text-xs font-medium tabular-nums tracking-[0.2em] text-muted-foreground/60">
         {String(index + 1).padStart(2, "0")}
@@ -39,14 +40,14 @@ export function PostListRow({ post, index }: PostListRowProps) {
           {post.pinned && (
             <Pin className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--status-progress))]" />
           )}
-          <h3 className="text-lg font-semibold leading-tight tracking-tight text-foreground md:text-xl">
+          <h3 className="line-clamp-2 text-base font-semibold leading-snug tracking-tight text-foreground md:text-lg">
             {post.title}
           </h3>
         </div>
-        <p className="mt-1.5 line-clamp-1 text-sm leading-5 text-muted-foreground">
+        <p className="mt-1 line-clamp-1 text-sm leading-5 text-muted-foreground">
           {getPreview(post.content)}
         </p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span className="font-medium text-foreground/70">{post.author.name}</span>
           {post.section && (
             <span className="text-muted-foreground/80">
@@ -56,22 +57,23 @@ export function PostListRow({ post, index }: PostListRowProps) {
           {post.tags.slice(0, 3).map((tag) => (
             <span key={tag.id}>#{tag.name}</span>
           ))}
+          {/* 窄屏：统计折进 meta 行 */}
+          <PostStats
+            replies={post._count.replies}
+            favorites={post._count.favorites}
+            createdAt={post.createdAt}
+            className="flex md:hidden"
+          />
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-4 text-xs tabular-nums text-muted-foreground/70">
-        <span className="inline-flex items-center gap-1">
-          <MessageSquare className="h-3 w-3" />
-          {post._count.replies}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Heart className="h-3 w-3" />
-          {post._count.favorites}
-        </span>
-        <time className="text-muted-foreground/60">
-          {new Date(post.createdAt).toLocaleDateString("zh-CN")}
-        </time>
-      </div>
+      {/* 宽屏：右侧独立对齐列 */}
+      <PostStats
+        replies={post._count.replies}
+        favorites={post._count.favorites}
+        createdAt={post.createdAt}
+        className="hidden shrink-0 md:flex"
+      />
     </Link>
   );
 }

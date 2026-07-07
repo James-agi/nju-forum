@@ -27,7 +27,7 @@ export function PostCard({ post, index }: PostCardProps) {
   return (
     <Link
       href={`/forum/post/${post.id}`}
-      className="frame-card glow-hover group flex h-full flex-col border border-border p-5 transition-colors hover:bg-muted/20"
+      className="frame-card glow-hover group flex h-full flex-col border border-border p-4 transition-colors hover:bg-muted/20"
     >
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium tabular-nums tracking-[0.2em] text-muted-foreground">
@@ -41,22 +41,22 @@ export function PostCard({ post, index }: PostCardProps) {
         )}
       </div>
 
-      <h3 className="mt-4 line-clamp-2 text-xl font-bold leading-7 tracking-tight text-foreground">
+      <h3 className="mt-3 line-clamp-2 text-base font-bold leading-6 tracking-tight text-foreground md:text-lg md:leading-7">
         {post.title}
       </h3>
-      <p className="mt-2 line-clamp-3 flex-1 text-sm leading-6 text-muted-foreground">
+      <p className="mt-1.5 line-clamp-2 flex-1 text-sm leading-6 text-muted-foreground">
         {getPreview(post.content)}
       </p>
 
       {post.tags.length > 0 && (
-        <div className="mt-4 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
           {post.tags.slice(0, 3).map((tag) => (
             <span key={tag.id}>#{tag.name}</span>
           ))}
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs text-muted-foreground">
+      <div className="mt-3 flex items-center justify-between border-t border-border pt-2.5 text-xs text-muted-foreground">
         <div className="flex items-center gap-3">
           <span className="inline-flex items-center gap-1">
             <MessageSquare className="h-3.5 w-3.5" />

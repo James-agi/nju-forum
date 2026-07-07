@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Eye, Heart, MessageSquare, Pin } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Pin } from "lucide-react";
 import { getPostTextPreview } from "@/lib/forum/post-preview";
+import { PostStats } from "@/components/forum/post-stats";
 
 interface PostListItemProps {
   post: {
@@ -41,59 +41,49 @@ export function PostListItem({ post, showSection = true }: PostListItemProps) {
   return (
     <Link
       href={`/forum/post/${post.id}`}
-      className="group block border-b border-border px-0 py-4 transition-colors hover:bg-muted/20"
+      className="group grid grid-cols-[1fr_auto] items-baseline gap-3 border-b border-border py-3 transition-colors hover:bg-muted/20 md:items-center md:gap-6 md:py-4"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1.5">
-          {(post.pinned || (showSection && post.section) || post.tags.length > 0) && (
-            <div className="flex flex-wrap items-center gap-2">
-              {post.pinned && (
-                <Badge variant="secondary" className="gap-1 text-[10px]">
-                  <Pin className="h-3 w-3" />
-                  置顶
-                </Badge>
-              )}
-              {showSection && post.section && (
-                <Badge variant="outline" className="text-[10px]">
-                  {post.section.icon} {post.section.name}
-                </Badge>
-              )}
-              {post.tags.slice(0, 3).map((tag) => (
-                <Badge key={tag.id} variant="secondary" className="text-[10px]">
-                  {tag.name}
-                </Badge>
-              ))}
-            </div>
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          {post.pinned && (
+            <Pin className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--status-progress))]" />
           )}
-
-          <h3 className="line-clamp-2 text-base font-semibold leading-6 text-foreground">
+          <h3 className="line-clamp-2 text-base font-semibold leading-snug tracking-tight text-foreground md:text-lg">
             {post.title}
           </h3>
-          <p className="line-clamp-1 text-sm leading-6 text-muted-foreground">
-            {getPreview(post.content)}
-          </p>
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground/80">{post.author.name}</span>
-            <span className="inline-flex items-center gap-1">
-              <Eye className="h-3.5 w-3.5" />
-              {post.viewCount}
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <MessageSquare className="h-3.5 w-3.5" />
-              {post._count.replies}
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <Heart className="h-3.5 w-3.5" />
-              {post._count.favorites}
-            </span>
-          </div>
         </div>
-
-        <time className="shrink-0 pt-0.5 text-xs tabular-nums text-muted-foreground/60">
-          {new Date(post.createdAt).toLocaleDateString("zh-CN")}
-        </time>
+        <p className="mt-1 line-clamp-1 text-sm leading-5 text-muted-foreground">
+          {getPreview(post.content)}
+        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground/70">{post.author.name}</span>
+          {showSection && post.section && (
+            <span className="text-muted-foreground/80">
+              {post.section.icon} {post.section.name}
+            </span>
+          )}
+          {post.tags.slice(0, 3).map((tag) => (
+            <span key={tag.id}>#{tag.name}</span>
+          ))}
+          {/* 窄屏：统计折进 meta 行 */}
+          <PostStats
+            views={post.viewCount}
+            replies={post._count.replies}
+            favorites={post._count.favorites}
+            createdAt={post.createdAt}
+            className="flex md:hidden"
+          />
+        </div>
       </div>
+
+      {/* 宽屏：右侧独立对齐列 */}
+      <PostStats
+        views={post.viewCount}
+        replies={post._count.replies}
+        favorites={post._count.favorites}
+        createdAt={post.createdAt}
+        className="hidden shrink-0 md:flex"
+      />
     </Link>
   );
 }
