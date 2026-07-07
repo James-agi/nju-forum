@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MessageSquare } from "lucide-react";
@@ -30,9 +30,10 @@ function ReplyItem({ reply, postId, depth = 0 }: { reply: Reply; postId: string;
   const [showReplyForm, setShowReplyForm] = useState(false);
 
   return (
-    <div className={depth > 0 ? "ml-8 border-l-2 border-muted pl-4" : ""}>
+    <div className={depth > 0 ? "ml-4 border-l-2 border-muted pl-3 sm:ml-8 sm:pl-4" : ""}>
       <div className="flex gap-3 py-3">
         <Avatar className="h-8 w-8 shrink-0">
+          <AvatarImage src={reply.author.avatar ?? undefined} alt={reply.author.name} />
           <AvatarFallback className="text-xs">
             {reply.author.name.charAt(0)}
           </AvatarFallback>

@@ -47,11 +47,20 @@ export const {
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
         token.role = (user as { role: string }).role;
         token.avatar = (user as { avatar: string | null }).avatar;
+      }
+      // 客户端 useSession().update({ avatar }) 时同步进 token，头像即时刷新
+      if (
+        trigger === "update" &&
+        session &&
+        typeof session === "object" &&
+        "avatar" in session
+      ) {
+        token.avatar = (session as { avatar: string | null }).avatar;
       }
       return token;
     },

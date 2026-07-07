@@ -8,7 +8,7 @@ import { TopicCard } from "@/components/forum/topic-card";
 import { TagCloud } from "@/components/forum/tag-cloud";
 import { LoginGate } from "@/components/auth/login-gate";
 import { Button } from "@/components/ui/button";
-import { PenSquare, X } from "lucide-react";
+import { PenSquare, Search, X } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -105,11 +105,11 @@ export default async function ForumPage({
             <p className="text-xs font-medium uppercase tracking-[0.3em] text-muted-foreground">
               NJU Know · 校园知识社区
             </p>
-            <h1 className="mt-4 text-6xl font-bold leading-[0.9] tracking-tight text-foreground md:text-8xl">
+            <h1 className="mt-4 text-5xl font-bold leading-[0.9] tracking-tight text-foreground sm:text-6xl md:text-8xl">
               知南
             </h1>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <ViewSwitcher current={view} />
             <span className="inline-flex h-9 items-center border border-border px-4 text-sm tabular-nums text-muted-foreground">
               {totalPosts} 帖
@@ -122,6 +122,21 @@ export default async function ForumPage({
             </Button>
           </div>
         </section>
+
+        <form
+          action="/search"
+          method="get"
+          className="flex items-center gap-3 border-b border-border py-4"
+        >
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <input
+            type="search"
+            name="q"
+            placeholder="搜索帖子、用户…"
+            aria-label="搜索帖子或用户"
+            className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          />
+        </form>
 
         <section className="flex items-baseline justify-between gap-3 border-b border-border py-4">
           <h2 className="section-label">

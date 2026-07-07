@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Hash, Sun, Moon, PenSquare, User } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Search, Hash, Sun, Moon, PenSquare, User, MessageSquare, Inbox, Users } from "lucide-react";
 
 interface CommandItem {
   id: string;
@@ -19,6 +20,8 @@ export function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
 
   const [isDark, setIsDark] = useState(false);
   useEffect(() => {
@@ -36,6 +39,7 @@ export function CommandPalette() {
   }, [isDark]);
 
   const items: CommandItem[] = [
+    { id: "search", label: "全站搜索", group: "导航", icon: <Search className="h-4 w-4" />, shortcut: "/search", action: () => { router.push("/search"); setOpen(false); } },
     { id: "hot", label: "精选热帖", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/hot", action: () => { router.push("/forum?view=list"); setOpen(false); } },
     { id: "cards", label: "卡片视图", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/cards", action: () => { router.push("/forum?view=card"); setOpen(false); } },
     { id: "tags", label: "标签视图", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/tags", action: () => { router.push("/forum?view=tag"); setOpen(false); } },
@@ -44,6 +48,13 @@ export function CommandPalette() {
     { id: "new", label: "发布新帖", group: "动作", icon: <PenSquare className="h-4 w-4" />, shortcut: "/new", action: () => { router.push("/forum/new"); setOpen(false); } },
     { id: "theme", label: isDark ? "切换亮色模式" : "切换暗色模式", group: "动作", icon: isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />, action: toggleTheme },
     { id: "profile", label: "个人设置", group: "动作", icon: <User className="h-4 w-4" />, shortcut: "/profile", action: () => { router.push("/user/profile"); setOpen(false); } },
+    { id: "feedback", label: "意见反馈", group: "动作", icon: <MessageSquare className="h-4 w-4" />, shortcut: "/feedback", action: () => { router.push("/feedback"); setOpen(false); } },
+    ...(isAdmin
+      ? [
+          { id: "admin-feedback", label: "反馈管理", group: "管理", icon: <Inbox className="h-4 w-4" />, shortcut: "/admin/feedback", action: () => { router.push("/admin/feedback"); setOpen(false); } },
+          { id: "admin-users", label: "用户管理", group: "管理", icon: <Users className="h-4 w-4" />, shortcut: "/admin/users", action: () => { router.push("/admin/users"); setOpen(false); } },
+        ]
+      : []),
   ];
 
   const filtered = query

@@ -25,6 +25,9 @@ model User {
   knowledgeQuestions       KnowledgeQuestion[]       @relation("KnowledgeQuestionAsker")
   posts                    Post[]
   replies                  Reply[]
+  contributionEvents       ContributionEvent[]       @relation("ContributionRecipient")
+  contributionsAwarded     ContributionEvent[]       @relation("ContributionAwardedBy")
+  websiteFeedbacks         WebsiteFeedback[]
 }
 
 model Post {
@@ -253,6 +256,43 @@ model KnowledgeConversation {
   @@index([createdAt])
   @@index([isActive])
   @@index([userId])
+}
+
+model WebsiteFeedback {
+  id         String   @id @default(cuid())
+  userId     String
+  category   String
+  content    String
+  contact    String?
+  createdAt  DateTime @default(now())
+  archivedAt DateTime?
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([archivedAt])
+}
+
+model ContributionEvent {
+  id          String           @id @default(cuid())
+  userId      String
+  points      Int
+  reason      String
+  type        ContributionType @default(OTHER)
+  createdById String?
+  createdAt   DateTime         @default(now())
+  user        User             @relation("ContributionRecipient", fields: [userId], references: [id])
+  createdBy   User?            @relation("ContributionAwardedBy", fields: [createdById], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+enum ContributionType {
+  CITED
+  MATERIAL
+  QUALITY_POST
+  OTHER
 }
 
 enum Role {
