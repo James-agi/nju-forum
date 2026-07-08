@@ -1,0 +1,91 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Build standalone app
+        run: npm run build
+
+      - name: Package release artifact
+        run: |
+          set -euxo pipefail
+          test -f .next/standalone/server.js
+
+          SHORT_SHA="${GITHUB_SHA::7}"
+          RELEASE_NAME="$(date +%Y%m%d%H%M%S)-${SHORT_SHA}"
+          ARTIFACT="njuknow-${RELEASE_NAME}.tar.gz"
+
+          mkdir -p deploy-bundle/.next deploy-bundle/scripts deploy-bundle/prisma
+          cp -a .next/standalone/. deploy-bundle/
+          cp -a .next/static deploy-bundle/.next/static
+          cp -a public deploy-bundle/public
+          cp -a prisma/migrations deploy-bundle/prisma/migrations
+          cp -a prisma/schema.prisma deploy-bundle/prisma/schema.prisma
+          cp -a package.json package-lock.json deploy-bundle/
+          cp -a scripts/start-standalone.js deploy-bundle/scripts/start-standalone.js
+          tar -czf "${ARTIFACT}" -C deploy-bundle .
+
+          echo "RELEASE_NAME=${RELEASE_NAME}" >> "${GITHUB_ENV}"
+          echo "ARTIFACT=${ARTIFACT}" >> "${GITHUB_ENV}"
+
+      - name: Prepare SSH
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+        run: |
+          set -euxo pipefail
+          test -n "${SERVER_HOST}"
+          test -n "${SERVER_SSH_KEY}"
+
+          PORT="${SERVER_PORT:-22}"
+          mkdir -p ~/.ssh
+          printf '%s\n' "${SERVER_SSH_KEY}" > ~/.ssh/njuknow_deploy_key
+          chmod 600 ~/.ssh/njuknow_deploy_key
+          ssh-keyscan -p "${PORT}" -H "${SERVER_HOST}" >> ~/.ssh/known_hosts
+          echo "SSH_PORT=${PORT}" >> "${GITHUB_ENV}"
+
+      - name: Upload artifact and deploy script
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+        run: |
+          set -euxo pipefail
+          USER="${SERVER_USER:-admin}"
+          REMOTE="${USER}@${SERVER_HOST}"
+
+          scp -P "${SSH_PORT}" -i ~/.ssh/njuknow_deploy_key "${ARTIFACT}" "${REMOTE}:/tmp/${ARTIFACT}"
+          scp -P "${SSH_PORT}" -i ~/.ssh/njuknow_deploy_key scripts/deploy-artifact-production.sh "${REMOTE}:/tmp/njuknow-deploy-artifact-production.sh"
+          ssh -p "${SSH_PORT}" -i ~/.ssh/njuknow_deploy_key "${REMOTE}" "chmod +x /tmp/njuknow-deploy-artifact-production.sh && RELEASE_NAME='${RELEASE_NAME}' bash /tmp/njuknow-deploy-artifact-production.sh '/tmp/${ARTIFACT}'"
+
+      - name: Verify public pages
+        run: |
+          set -euxo pipefail
+          curl -fsS https://njuknow.xyz/login >/dev/null
+          curl -fsS https://njuknow.xyz/knowledge >/dev/null
