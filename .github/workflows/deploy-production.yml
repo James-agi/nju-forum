@@ -46,10 +46,12 @@ jobs:
           RELEASE_NAME="$(date +%Y%m%d%H%M%S)-${SHORT_SHA}"
           ARTIFACT="njuknow-${RELEASE_NAME}.tar.gz"
 
-          mkdir -p deploy-bundle/.next deploy-bundle/scripts deploy-bundle/prisma
+          mkdir -p deploy-bundle/.next deploy-bundle/scripts deploy-bundle/prisma deploy-bundle/public
           cp -a .next/standalone/. deploy-bundle/
           cp -a .next/static deploy-bundle/.next/static
-          cp -a public deploy-bundle/public
+          if [ -d public ]; then
+            cp -a public/. deploy-bundle/public/
+          fi
           cp -a prisma/migrations deploy-bundle/prisma/migrations
           cp -a prisma/schema.prisma deploy-bundle/prisma/schema.prisma
           cp -a package.json package-lock.json deploy-bundle/
