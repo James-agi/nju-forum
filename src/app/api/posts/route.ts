@@ -5,6 +5,7 @@ import {
   encodePostContent,
   normalizePostContentFormat,
 } from "@/lib/forum/content-format";
+import { recomputePostMetrics } from "@/lib/forum/post-metrics";
 
 const MAX_POST_IMAGES = 6;
 const MAX_TAGS = 10;
@@ -42,8 +43,16 @@ export async function GET(req: Request) {
     const where = sectionId ? { sectionId } : {};
     const orderBy =
       sort === "hot"
-        ? [{ viewCount: "desc" as const }, { createdAt: "desc" as const }]
-        : [{ pinned: "desc" as const }, { createdAt: "desc" as const }];
+        ? [
+            { hotScore: "desc" as const },
+            { createdAt: "desc" as const },
+            { id: "desc" as const },
+          ]
+        : [
+            { pinned: "desc" as const },
+            { createdAt: "desc" as const },
+            { id: "desc" as const },
+          ];
 
     const [posts, total] = await Promise.all([
       db.post.findMany({
@@ -128,6 +137,7 @@ export async function POST(req: Request) {
         tags: tagRecords.length > 0 ? { connect: tagRecords.map((t) => ({ id: t.id })) } : undefined,
       },
     });
+    await recomputePostMetrics(post.id);
 
     return NextResponse.json(post);
   } catch (error) {

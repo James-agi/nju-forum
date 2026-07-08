@@ -15,6 +15,7 @@
     "db:seed:sections": "npx tsx prisma/seed-sections.ts",
     "db:seed:knowledge": "npx tsx prisma/seed-knowledge.ts",
     "db:studio": "npx prisma studio",
+    "metrics:refresh-posts": "npx tsx scripts/refresh-post-metrics.ts",
     "smoke:p0": "npx tsx scripts/p0-smoke.ts"
   },
   "dependencies": {

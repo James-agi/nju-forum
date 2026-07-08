@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { ViewSwitcher } from "@/components/forum/view-switcher";
@@ -6,13 +7,18 @@ import { PostListRow } from "@/components/forum/post-list-row";
 import { PostCard } from "@/components/forum/post-card";
 import { TopicCard } from "@/components/forum/topic-card";
 import { TagCloud } from "@/components/forum/tag-cloud";
+import { ForumDiscoverySection } from "@/components/forum/forum-discovery-section";
 import { LoginGate } from "@/components/auth/login-gate";
 import { Button } from "@/components/ui/button";
 import { PenSquare, Search, X } from "lucide-react";
+import { getForumDiscoveryPosts } from "@/lib/forum/post-metrics";
 
 export const dynamic = "force-dynamic";
 
 type SearchParams = { view?: string; tag?: string; topic?: string };
+
+const GLOBAL_DISCOVERY_POST_THRESHOLD = 30;
+const SCOPED_DISCOVERY_POST_THRESHOLD = 12;
 
 const VIEW_HINT: Record<string, string> = {
   list: "按发布时间排序",
@@ -47,18 +53,44 @@ export default async function ForumPage({
     .filter((t) => t.count > 0)
     .sort((a, b) => b.count - a.count);
 
-  const where: Record<string, unknown> = {};
+  const where: Prisma.PostWhereInput = {};
   if (view === "tag" && activeTag) where.tags = { some: { name: activeTag } };
   if (view === "topic" && activeTopic) where.sectionId = activeTopic;
 
   const isTopicGrid = view === "topic" && !activeTopic;
+  const totalPosts = sections.reduce((sum, s) => sum + s._count.posts, 0);
+  const scopedPostCount =
+    view === "tag" && activeTag
+      ? tags.find((tag) => tag.name === activeTag)?.count ?? 0
+      : view === "topic" && activeTopic
+        ? sections.find((section) => section.id === activeTopic)?._count.posts ?? 0
+        : totalPosts;
+  const discoveryEnabled =
+    (view === "list" && totalPosts >= GLOBAL_DISCOVERY_POST_THRESHOLD) ||
+    (view === "tag" &&
+      Boolean(activeTag) &&
+      scopedPostCount >= SCOPED_DISCOVERY_POST_THRESHOLD) ||
+    (view === "topic" &&
+      Boolean(activeTopic) &&
+      scopedPostCount >= SCOPED_DISCOVERY_POST_THRESHOLD);
+  const discoveryScope =
+    view === "tag" && activeTag
+      ? { tagName: activeTag }
+      : view === "topic" && activeTopic
+        ? { sectionId: activeTopic }
+        : {};
+  const { activePosts, hotPosts } = await getForumDiscoveryPosts({
+    enabled: discoveryEnabled,
+    where,
+    scope: discoveryScope,
+  });
 
   const posts = isTopicGrid
     ? []
     : await db.post.findMany({
         where,
         take: 40,
-        orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ pinned: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         include: {
           author: { select: { name: true } },
           section: { select: { id: true, name: true, icon: true } },
@@ -67,32 +99,6 @@ export default async function ForumPage({
         },
       });
 
-  // 精选热帖：score = favorites*3 + replies*2 + (7天内 +10)
-  const sevenDaysAgo = new Date(Date.now() - 7 * 86400_000);
-  const hotPosts = view === "list"
-    ? await db.post.findMany({
-        take: 20,
-        include: {
-          author: { select: { name: true } },
-          section: { select: { id: true, name: true, icon: true } },
-          tags: { select: { id: true, name: true } },
-          _count: { select: { replies: true, favorites: true } },
-        },
-      }).then((all) =>
-        all
-          .map((p) => ({
-            ...p,
-            _score:
-              p._count.favorites * 3 +
-              p._count.replies * 2 +
-              (p.createdAt > sevenDaysAgo ? 10 : 0),
-          }))
-          .sort((a, b) => b._score - a._score)
-          .slice(0, 4)
-      )
-    : [];
-
-  const totalPosts = sections.reduce((sum, s) => sum + s._count.posts, 0);
   const activeTopicSection = activeTopic
     ? sections.find((s) => s.id === activeTopic)
     : null;
@@ -158,6 +164,7 @@ export default async function ForumPage({
             </span>
             <Link
               href={activeTag ? "/forum?view=tag" : "/forum?view=topic"}
+              scroll={false}
               className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
@@ -167,40 +174,10 @@ export default async function ForumPage({
         )}
 
         <div key={view} className="mt-8 animate-view">
+          <ForumDiscoverySection activePosts={activePosts} hotPosts={hotPosts} />
+
           {view === "list" && (
             <div>
-              {hotPosts.length > 0 && (
-                <div className="mb-10">
-                  <div className="mb-4 flex items-center gap-2">
-                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-orange-500" />
-                    <h3 className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                      精选热帖
-                    </h3>
-                  </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {hotPosts.map((post, i) => (
-                      <Link
-                        key={post.id}
-                        href={`/forum/post/${post.id}`}
-                        style={{ "--index": i } as React.CSSProperties}
-                        className="animate-stagger glow-hover group flex flex-col gap-2 border border-border p-4 transition-all hover:border-foreground/30 hover:bg-muted/30"
-                      >
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{post.section?.icon}</span>
-                          <span>{post.section?.name}</span>
-                          <span className="ml-auto tabular-nums text-orange-400/80">
-                            {post._count.favorites + post._count.replies} 热度
-                          </span>
-                        </div>
-                        <h4 className="text-sm font-semibold leading-tight text-foreground transition-colors">
-                          {post.title}
-                        </h4>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               <div className="mb-4 flex items-center gap-2">
                 <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500" />
                 <h3 className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">

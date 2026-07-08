@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { type PointerEvent, type WheelEvent, useRef, useState } from "react";
 import { Minus, Plus, RotateCcw, ZoomIn } from "lucide-react";
 import {
@@ -82,11 +83,14 @@ export function PostImageViewer({ src, alt }: { src: string; alt: string }) {
           aria-label={`放大查看${alt ? `：${alt}` : "帖子图片"}`}
           title="点击放大查看"
         >
-          <img
+          <Image
             src={src}
             alt={alt}
-            loading="lazy"
+            width={1200}
+            height={800}
+            sizes="(min-width: 768px) 720px, 100vw"
             className="max-h-[520px] w-full object-contain transition-transform duration-200 group-hover:scale-[1.01]"
+            unoptimized
           />
           <span className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/90 text-foreground opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
             <ZoomIn className="h-4 w-4" aria-hidden="true" />
@@ -147,9 +151,13 @@ export function PostImageViewer({ src, alt }: { src: string; alt: string }) {
           onPointerCancel={endDrag}
           onWheel={handleWheel}
         >
-          <img
+          <Image
             src={src}
             alt={alt}
+            width={1600}
+            height={1000}
+            sizes="92vw"
+            unoptimized
             draggable={false}
             className="max-h-full max-w-full select-none object-contain"
             style={{

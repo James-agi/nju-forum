@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { type ChangeEvent, useRef, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Code2, FileText, ImagePlus, Loader2, MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -278,11 +279,14 @@ export function ReplyForm({
         {images.length > 0 && (
           <div className="grid gap-2 sm:grid-cols-2">
             {images.map((image, index) => (
-              <div key={image.url} className="relative overflow-hidden rounded-md border bg-muted/30">
-                <img
+              <div key={image.url} className="relative h-28 overflow-hidden rounded-md border bg-muted/30">
+                <Image
                   src={image.url}
                   alt={image.alt || `回复图片 ${index + 1}`}
-                  className="h-28 w-full object-contain"
+                  fill
+                  sizes="(min-width: 640px) 50vw, 100vw"
+                  className="object-contain"
+                  unoptimized
                 />
                 <Button
                   type="button"

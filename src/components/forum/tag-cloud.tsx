@@ -28,6 +28,7 @@ export function TagCloud({
     <div className="flex flex-wrap gap-2">
       <Link
         href="/forum?view=tag"
+        scroll={false}
         className={`${chip} ${
           !activeTag
             ? "border-foreground bg-foreground text-background"
@@ -44,6 +45,7 @@ export function TagCloud({
           <Link
             key={tag.id}
             href={`/forum?view=tag&tag=${encodeURIComponent(tag.name)}`}
+            scroll={false}
             className={`${chip} ${
               isActive
                 ? "border-foreground bg-foreground text-background"

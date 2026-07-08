@@ -49,7 +49,7 @@ export async function searchForum(
   const rawPosts = await db.post.findMany({
     where: { OR: postOr },
     take: 40,
-    orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ pinned: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     include: {
       author: { select: { name: true } },
       section: { select: { id: true, name: true, icon: true } },
@@ -70,7 +70,13 @@ export async function searchForum(
       }
       return { p, score };
     })
-    .sort((a, b) => b.score - a.score)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        Number(b.p.pinned) - Number(a.p.pinned) ||
+        b.p.createdAt.getTime() - a.p.createdAt.getTime() ||
+        b.p.id.localeCompare(a.p.id)
+    )
     .slice(0, 20)
     .map((s) => s.p);
 

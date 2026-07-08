@@ -4,9 +4,13 @@ import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { SectionLabel } from "@/components/ui/section-label";
 import { PostListItem } from "@/components/forum/post-list-item";
+import { ForumDiscoverySection } from "@/components/forum/forum-discovery-section";
 import { ArrowLeft, PenSquare } from "lucide-react";
+import { getForumDiscoveryPosts } from "@/lib/forum/post-metrics";
 
 export const dynamic = "force-dynamic";
+
+const SECTION_DISCOVERY_POST_THRESHOLD = 12;
 
 interface SectionPageProps {
   params: { id: string };
@@ -21,7 +25,7 @@ export default async function SectionPage({ params }: SectionPageProps) {
 
   const posts = await db.post.findMany({
     where: { sectionId: params.id },
-    orderBy: [{ pinned: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ pinned: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     include: {
       author: { select: { id: true, name: true, avatar: true } },
       tags: { select: { id: true, name: true } },
@@ -30,6 +34,11 @@ export default async function SectionPage({ params }: SectionPageProps) {
   });
 
   const totalReplies = posts.reduce((sum, post) => sum + post._count.replies, 0);
+  const { activePosts, hotPosts } = await getForumDiscoveryPosts({
+    enabled: posts.length >= SECTION_DISCOVERY_POST_THRESHOLD,
+    where: { sectionId: params.id },
+    scope: { sectionId: params.id },
+  });
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)]">
@@ -70,6 +79,8 @@ export default async function SectionPage({ params }: SectionPageProps) {
             <span className="ml-2 text-xs uppercase tracking-[0.15em] text-muted-foreground">回复</span>
           </div>
         </div>
+
+        <ForumDiscoverySection activePosts={activePosts} hotPosts={hotPosts} />
 
         <section className="animate-slide-up">
           <div className="flex items-baseline justify-between gap-3">

@@ -1,6 +1,7 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Clock, Eye, Heart, MessageSquare } from "lucide-react";
+import { Clock, Eye, Heart, MessageSquare } from "lucide-react";
 import { db } from "@/lib/db";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -8,16 +9,110 @@ import { ReplyForm } from "@/components/forum/reply-form";
 import { ReplyList } from "@/components/forum/reply-list";
 import { FavoriteButton } from "@/components/forum/favorite-button";
 import { LoginGate } from "@/components/auth/login-gate";
+import { PostBackButton } from "@/components/forum/post-back-button";
 import { PostExitKey } from "@/components/forum/post-exit-key";
 import { PostContent } from "@/components/forum/post-content";
+import { ShareButton } from "@/components/forum/share-button";
 import { getSession } from "@/lib/auth-utils";
 import { getStoredPostContentFormat } from "@/lib/forum/content-format";
 import { getPostTextPreview } from "@/lib/forum/post-preview";
+import { recordPostView } from "@/lib/forum/post-metrics";
 
 export const dynamic = "force-dynamic";
 
 interface PostPageProps {
   params: { id: string };
+}
+
+const SITE_NAME = "知南 - NJU Know";
+const DEFAULT_SITE_URL = "http://localhost:3000";
+
+function getSiteUrl() {
+  const rawUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.NEXTAUTH_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : DEFAULT_SITE_URL);
+
+  try {
+    return new URL(rawUrl);
+  } catch {
+    return new URL(DEFAULT_SITE_URL);
+  }
+}
+
+function getPostUrl(id: string) {
+  return new URL(`/forum/post/${id}`, getSiteUrl()).toString();
+}
+
+function getShareDescription(content: string) {
+  const preview = getPostTextPreview(content, 4).replace(/\s+/g, " ").trim();
+  if (!preview) return "来自知南社区的帖子";
+  return preview.length > 160 ? `${preview.slice(0, 157)}...` : preview;
+}
+
+function getShareImageUrls(images: string[]) {
+  const siteUrl = getSiteUrl();
+
+  return images
+    .filter((image) => image.startsWith("/forum-images/"))
+    .slice(0, 1)
+    .map((image) => new URL(image, siteUrl).toString());
+}
+
+export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
+  const post = await db.post.findUnique({
+    where: { id: params.id },
+    select: {
+      id: true,
+      title: true,
+      content: true,
+      images: true,
+      createdAt: true,
+      updatedAt: true,
+      author: { select: { name: true } },
+      section: { select: { name: true } },
+      tags: { select: { name: true } },
+    },
+  });
+
+  if (!post) {
+    return {
+      title: `帖子不存在 | ${SITE_NAME}`,
+      description: "这个帖子不存在或已被移除。",
+    };
+  }
+
+  const description = getShareDescription(post.content);
+  const postUrl = getPostUrl(post.id);
+  const imageUrls = getShareImageUrls(post.images);
+
+  return {
+    metadataBase: getSiteUrl(),
+    title: `${post.title} | ${SITE_NAME}`,
+    description,
+    alternates: {
+      canonical: postUrl,
+    },
+    openGraph: {
+      type: "article",
+      siteName: SITE_NAME,
+      title: post.title,
+      description,
+      url: postUrl,
+      publishedTime: post.createdAt.toISOString(),
+      modifiedTime: post.updatedAt.toISOString(),
+      authors: [post.author.name],
+      section: post.section.name,
+      tags: post.tags.map((tag) => tag.name),
+      images: imageUrls.length > 0 ? imageUrls : undefined,
+    },
+    twitter: {
+      card: imageUrls.length > 0 ? "summary_large_image" : "summary",
+      title: post.title,
+      description,
+      images: imageUrls.length > 0 ? imageUrls : undefined,
+    },
+  };
 }
 
 export default async function PostPage({ params }: PostPageProps) {
@@ -35,23 +130,22 @@ export default async function PostPage({ params }: PostPageProps) {
 
   if (!post) notFound();
 
-  await db.post.update({
-    where: { id: params.id },
-    data: { viewCount: { increment: 1 } },
-  });
+  await recordPostView(params.id);
 
   const contentFormat = getStoredPostContentFormat(post.content);
   const displayViewCount = post.viewCount + 1;
 
   const replies = await db.reply.findMany({
     where: { postId: params.id, parentId: null },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     include: {
       author: { select: { id: true, name: true, avatar: true } },
       children: {
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         include: {
           author: { select: { id: true, name: true, avatar: true } },
           children: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             include: {
               author: { select: { id: true, name: true, avatar: true } },
             },
@@ -80,7 +174,7 @@ export default async function PostPage({ params }: PostPageProps) {
       OR: relatedPostFilters,
     },
     take: 5,
-    orderBy: [{ replyCount: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ replyCount: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     include: {
       section: { select: { name: true, icon: true } },
       _count: { select: { replies: true } },
@@ -88,19 +182,14 @@ export default async function PostPage({ params }: PostPageProps) {
   });
 
   const previewText = getPostTextPreview(post.content, 4);
+  const shareText = previewText.replace(/\s+/g, " ").trim();
   const previewLines = previewText.split(/\r?\n/).filter(Boolean);
 
   return (
     <div className="container mx-auto max-w-4xl px-4 py-8">
       <PostExitKey />
       <div className="mb-6">
-        <Link
-          href="/forum"
-          className="inline-flex items-center gap-1.5 text-xs uppercase tracking-[0.15em] text-muted-foreground transition-colors hover:text-foreground"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" />
-          返回论坛
-        </Link>
+        <PostBackButton />
       </div>
 
       <article className="animate-fade-in">
@@ -175,12 +264,13 @@ export default async function PostPage({ params }: PostPageProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-4 border-t border-border py-4">
+        <div className="flex flex-wrap items-center gap-3 border-t border-border py-4">
           <FavoriteButton
             postId={post.id}
             initialFavorited={isFavorited}
             canFavorite={Boolean(session?.user)}
           />
+          <ShareButton title={post.title} text={shareText || undefined} />
         </div>
       </article>
 

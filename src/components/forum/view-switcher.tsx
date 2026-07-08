@@ -36,7 +36,7 @@ export function ViewSwitcher({ current }: { current: string }) {
         {VIEWS.map((v) => (
           <DropdownMenuItem
             key={v.key}
-            onSelect={() => router.push(`/forum?view=${v.key}`)}
+            onSelect={() => router.push(`/forum?view=${v.key}`, { scroll: false })}
             className={`gap-2 rounded-none ${
               v.key === current ? "bg-accent text-accent-foreground" : ""
             }`}

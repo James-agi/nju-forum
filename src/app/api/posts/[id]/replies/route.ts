@@ -5,6 +5,7 @@ import {
   encodePostContent,
   normalizePostContentFormat,
 } from "@/lib/forum/content-format";
+import { recomputePostMetrics } from "@/lib/forum/post-metrics";
 
 const MAX_REPLY_IMAGES = 6;
 const FORUM_IMAGE_PATTERN = /^\/forum-images\/[A-Za-z0-9._~/%-]+$/;
@@ -26,13 +27,15 @@ export async function GET(
   try {
     const replies = await db.reply.findMany({
       where: { postId: params.id, parentId: null },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       include: {
         author: { select: { id: true, name: true, avatar: true } },
         children: {
+          orderBy: [{ createdAt: "asc" }, { id: "asc" }],
           include: {
             author: { select: { id: true, name: true, avatar: true } },
             children: {
+              orderBy: [{ createdAt: "asc" }, { id: "asc" }],
               include: {
                 author: { select: { id: true, name: true, avatar: true } },
               },
@@ -103,6 +106,7 @@ export async function POST(
       where: { id: params.id },
       data: { replyCount: { increment: 1 } },
     });
+    await recomputePostMetrics(params.id);
 
     return NextResponse.json(reply);
   } catch (error) {
