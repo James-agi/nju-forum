@@ -46,7 +46,18 @@ const HARD_OUT_OF_SCOPE_RULES: ScopeRule[] = [
   {
     code: "ACADEMIC_MISCONDUCT",
     label: "学术不端或违规请求",
-    keywords: ["作弊", "不被发现", "代写", "帮我直接完成", "直接完成这篇", "帮我写论文"],
+    keywords: [
+      "作弊",
+      "不被发现",
+      "代写",
+      "帮我直接完成",
+      "直接完成这篇",
+      "帮我写论文",
+      "帮我直接写完",
+      "帮我写完",
+      "直接写完",
+      "写完课程论文",
+    ],
   },
   {
     code: "MEDICAL_ADVICE",

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { scoreCard, evaluateEvidence } from "../retrieval";
 import type { RetrievalCard, RetrievalResult } from "../retrieval";
 import { classifyP0Scope, classifyNoResult } from "../scope";
+import { extractRetrievalTerms } from "../term-extraction";
 import { normalizeQuestionText } from "../validation";
 
 function makeCard(overrides: Partial<RetrievalCard> = {}): RetrievalCard {
@@ -170,6 +171,7 @@ describe("classifyP0Scope", () => {
   it("allows stable campus-adjacent card topics that are already in the knowledge base", () => {
     expect(classifyP0Scope("教材要不要买新书？二手书去哪找？").inScope).toBe(true);
     expect(classifyP0Scope("如何向南哪助手投稿").inScope).toBe(true);
+    expect(classifyP0Scope("怎么给南哪投稿").inScope).toBe(true);
   });
 
   it("still rejects textbook exercise solving requests", () => {
@@ -193,6 +195,7 @@ describe("classifyP0Scope", () => {
   it("rejects academic misconduct and direct paper completion requests", () => {
     expect(classifyP0Scope("考试怎么作弊不被发现").code).toBe("ACADEMIC_MISCONDUCT");
     expect(classifyP0Scope("帮我直接完成这篇英语论文").code).toBe("ACADEMIC_MISCONDUCT");
+    expect(classifyP0Scope("帮我直接写完课程论文").code).toBe("ACADEMIC_MISCONDUCT");
   });
 
   it("rejects concrete medical advice and personal account balance lookup", () => {
@@ -231,5 +234,19 @@ describe("classifyNoResult hard blocks", () => {
   it("returns OUT_OF_SCOPE for hard blocked questions", () => {
     expect(classifyNoResult("\u5357\u4eac\u660e\u5929\u5929\u6c14\u600e\u4e48\u6837")).toBe("OUT_OF_SCOPE");
     expect(classifyNoResult("\u5e2e\u6211\u67e5\u6211\u7684\u6210\u7ee9\u6392\u540d")).toBe("OUT_OF_SCOPE");
+  });
+});
+
+describe("extractRetrievalTerms aliases", () => {
+  it("expands common student phrasing into campus service anchors", async () => {
+    await expect(extractRetrievalTerms("仙林附近有剪头发的地方吗")).resolves.toEqual(
+      expect.arrayContaining(["理发", "理发店"]),
+    );
+    await expect(extractRetrievalTerms("浦口去仙林怎么换乘")).resolves.toEqual(
+      expect.arrayContaining(["通勤", "路线", "地铁", "公交", "班车"]),
+    );
+    await expect(extractRetrievalTerms("计算机类一般在哪个校区")).resolves.toEqual(
+      expect.arrayContaining(["计算机类", "在哪个校区", "院系", "校区归属"]),
+    );
   });
 });
