@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { requireKnowledgeAuthor } from "@/lib/knowledge/authz";
+import { requireKnowledgeAuthor, requireKnowledgeUser } from "@/lib/knowledge/authz";
 import {
   cardCreateSchema,
   formatValidationError,
@@ -17,37 +17,165 @@ import { answerCache } from "@/lib/knowledge/cache";
 
 export const dynamic = "force-dynamic";
 
-function toCardDTO(card: {
-  id: string;
-  summary: string;
-  body: string;
-  sourceExcerpt: string | null;
-  sourceUrl: string | null;
-  sourceDescription: string;
-  sourceType: KnowledgeCardDTO["sourceType"];
-  verificationStatus: KnowledgeCardDTO["verificationStatus"];
-  domainTag: string;
-  createdAt: Date;
-  updatedAt: Date;
-}): KnowledgeCardDTO {
+const KNOWLEDGE_CARD_LIST_SELECT = {
+  id: true,
+  summary: true,
+  body: true,
+  sourceExcerpt: true,
+  sourceUrl: true,
+  sourceDescription: true,
+  sourceType: true,
+  verificationStatus: true,
+  verifiedAt: true,
+  domainTag: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.KnowledgeCardSelect;
+
+type KnowledgeCardListRecord = Prisma.KnowledgeCardGetPayload<{
+  select: typeof KNOWLEDGE_CARD_LIST_SELECT;
+}> & {
+  summary: string | null;
+  body: string | null;
+  sourceDescription: string | null;
+  sourceType: string | null;
+  verificationStatus: string | null;
+  domainTag: string | null;
+  verifiedAt: Date | string | null;
+  createdAt: Date | string | null;
+  updatedAt: Date | string | null;
+};
+
+interface KnowledgeCardListFilters {
+  q?: string;
+  domainTag?: string;
+  verificationStatus?: string;
+}
+
+function toDate(value: Date | string | null | undefined) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
+function toIsoString(value: Date | string | null | undefined, fallback: Date) {
+  return toDate(value)?.toISOString() ?? fallback.toISOString();
+}
+
+function normalizeSourceType(value: string | null): KnowledgeCardDTO["sourceType"] {
+  return SOURCE_TYPES.includes(value as KnowledgeCardDTO["sourceType"])
+    ? (value as KnowledgeCardDTO["sourceType"])
+    : "OTHER";
+}
+
+function normalizeVerificationStatus(
+  value: string | null
+): KnowledgeCardDTO["verificationStatus"] {
+  return VERIFICATION_STATUSES.includes(value as KnowledgeCardDTO["verificationStatus"])
+    ? (value as KnowledgeCardDTO["verificationStatus"])
+    : "NEEDS_REVIEW";
+}
+
+function toCardDTO(card: KnowledgeCardListRecord): KnowledgeCardDTO {
+  const createdAt = toDate(card.createdAt) ?? new Date(0);
+  const updatedAt = toDate(card.updatedAt) ?? createdAt;
+
   return {
     id: card.id,
-    summary: card.summary,
-    body: card.body,
+    summary: card.summary ?? "未命名知识卡片",
+    body: card.body ?? "",
     sourceExcerpt: card.sourceExcerpt,
     sourceUrl: card.sourceUrl,
-    sourceDescription: card.sourceDescription,
-    sourceType: card.sourceType,
-    verificationStatus: card.verificationStatus,
-    domainTag: card.domainTag,
-    createdAt: card.createdAt.toISOString(),
-    updatedAt: card.updatedAt.toISOString(),
+    sourceDescription: card.sourceDescription ?? "来源说明缺失",
+    sourceType: normalizeSourceType(card.sourceType),
+    verificationStatus: normalizeVerificationStatus(card.verificationStatus),
+    verifiedAt: card.verifiedAt ? toIsoString(card.verifiedAt, updatedAt) : null,
+    domainTag: card.domainTag ?? "其他",
+    createdAt: toIsoString(createdAt, new Date(0)),
+    updatedAt: toIsoString(updatedAt, createdAt),
   };
+}
+
+function buildKnowledgeCardWhereSql(filters: KnowledgeCardListFilters) {
+  const clauses = [Prisma.sql`"archivedAt" IS NULL`];
+
+  if (filters.q) {
+    const pattern = `%${filters.q}%`;
+    clauses.push(Prisma.sql`(
+      "summary" ILIKE ${pattern}
+      OR "body" ILIKE ${pattern}
+      OR "domainTag" ILIKE ${pattern}
+      OR "sourceDescription" ILIKE ${pattern}
+    )`);
+  }
+
+  if (filters.domainTag) {
+    clauses.push(Prisma.sql`"domainTag" ILIKE ${`%${filters.domainTag}%`}`);
+  }
+
+  if (
+    filters.verificationStatus &&
+    VERIFICATION_STATUSES.includes(
+      filters.verificationStatus as KnowledgeCardDTO["verificationStatus"]
+    )
+  ) {
+    clauses.push(Prisma.sql`"verificationStatus"::text = ${filters.verificationStatus}`);
+  }
+
+  return Prisma.sql`${Prisma.join(clauses, " AND ")}`;
+}
+
+async function findKnowledgeCards(
+  where: Prisma.KnowledgeCardWhereInput,
+  filters: KnowledgeCardListFilters,
+  skip: number,
+  limit: number
+) {
+  try {
+    return await db.knowledgeCard.findMany({
+      where,
+      select: KNOWLEDGE_CARD_LIST_SELECT,
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
+      skip,
+      take: limit,
+    });
+  } catch (error) {
+    console.warn("[knowledge-cards] Prisma list query failed, using raw fallback:", error);
+    const whereSql = buildKnowledgeCardWhereSql(filters);
+
+    return db.$queryRaw<KnowledgeCardListRecord[]>`
+      SELECT
+        "id",
+        "summary",
+        "body",
+        "sourceExcerpt",
+        "sourceUrl",
+        "sourceDescription",
+        "sourceType"::text AS "sourceType",
+        "verificationStatus"::text AS "verificationStatus",
+        "verifiedAt",
+        "domainTag",
+        "createdAt",
+        "updatedAt"
+      FROM "KnowledgeCard"
+      WHERE ${whereSql}
+      ORDER BY "updatedAt" DESC NULLS LAST, "id" DESC
+      OFFSET ${skip}
+      LIMIT ${limit}
+    `;
+  }
 }
 
 export async function GET(req: Request) {
   try {
-    const authz = await requireKnowledgeAuthor();
+    const authz = await requireKnowledgeUser();
     if (!authz.ok) return authz.response;
 
     const { searchParams } = new URL(req.url);
@@ -81,13 +209,9 @@ export async function GET(req: Request) {
       where.verificationStatus = verificationStatus as (typeof VERIFICATION_STATUSES)[number];
     }
 
+    const filters = { q, domainTag, verificationStatus };
     const [cards, total, groupedStatusCounts] = await Promise.all([
-      db.knowledgeCard.findMany({
-        where,
-        orderBy: { updatedAt: "desc" },
-        skip,
-        take: limit,
-      }),
+      findKnowledgeCards(where, filters, skip, limit),
       db.knowledgeCard.count({ where }),
       db.knowledgeCard.groupBy({
         by: ["verificationStatus"],
@@ -151,6 +275,7 @@ export async function POST(req: Request) {
         ...parsed.data,
         sourceUrls: sourceUrls ? JSON.stringify(sourceUrls) : null,
         verificationStatus,
+        verifiedAt: verificationStatus === "VERIFIED" ? new Date() : null,
         sourceUrl: parsed.data.sourceUrl ?? null,
         createdById: authz.user.id,
       },

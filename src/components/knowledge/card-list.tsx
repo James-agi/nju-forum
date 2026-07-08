@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type KeyboardEvent } from "react";
-import { Archive, Check, ChevronDown, ChevronUp, ExternalLink, Loader2, Pencil } from "lucide-react";
+import Link from "next/link";
+import { Archive, BookOpen, Check, ChevronDown, ChevronUp, ExternalLink, Loader2, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -221,6 +222,16 @@ export function CardList({ cards, loading, onEdit, onArchive, onUpdated }: CardL
                       </div>
                     </div>
                     <div className="flex shrink-0 gap-2">
+                      <Button asChild variant="outline" size="sm">
+                        <Link
+                          href={`/knowledge/cards/${card.id}`}
+                          onClick={(event) => event.stopPropagation()}
+                          aria-label={`查看 ${card.summary}`}
+                          title="查看卡片"
+                        >
+                          <BookOpen className="h-4 w-4" />
+                        </Link>
+                      </Button>
                       {onEdit && (
                         <Button
                           variant="outline"

@@ -15,11 +15,13 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  KNOWLEDGE_DOMAIN_TAG_DESCRIPTIONS,
   KNOWLEDGE_DOMAIN_TAGS,
   SOURCE_TYPE_LABELS,
   SOURCE_TYPES,
   VERIFICATION_STATUS_LABELS,
   VERIFICATION_STATUSES,
+  type KnowledgeDomainTagValue,
   type KnowledgeCardDTO,
   type SourceTypeValue,
   type VerificationStatusValue,
@@ -62,8 +64,8 @@ const CUSTOM_DOMAIN_TAG = "__CUSTOM_DOMAIN_TAG__";
 const SOURCE_EXCERPT_MAX_LENGTH = 12000;
 const MAX_SELECTED_IMAGES = 5;
 
-function isKnownDomainTag(value: string) {
-  return KNOWLEDGE_DOMAIN_TAGS.includes(value as (typeof KNOWLEDGE_DOMAIN_TAGS)[number]);
+function isKnownDomainTag(value: string): value is KnowledgeDomainTagValue {
+  return KNOWLEDGE_DOMAIN_TAGS.includes(value as KnowledgeDomainTagValue);
 }
 
 export function CardEditor({ card, onSaved }: CardEditorProps) {
@@ -81,6 +83,9 @@ export function CardEditor({ card, onSaved }: CardEditorProps) {
   const domainTagSelectValue = isKnownDomainTag(form.domainTag)
     ? form.domainTag
     : CUSTOM_DOMAIN_TAG;
+  const domainTagDescription = isKnownDomainTag(form.domainTag)
+    ? KNOWLEDGE_DOMAIN_TAG_DESCRIPTIONS[form.domainTag]
+    : "用于推荐分区放不下的特殊主题；名称尽量短，避免和已有分区同义重复。";
 
   useEffect(() => {
     setSourceImageUrl("");
@@ -375,6 +380,7 @@ export function CardEditor({ card, onSaved }: CardEditorProps) {
                             {candidate.alt || "未命名图片"}
                           </span>
                         </div>
+                        {/* eslint-disable-next-line @next/next/no-img-element -- 候选图来自任意外部 URL，不能交给 next/image 代理优化。 */}
                         <img
                           src={candidate.url}
                           alt={candidate.alt ?? "网页图片候选"}
@@ -451,7 +457,7 @@ export function CardEditor({ card, onSaved }: CardEditorProps) {
           </div>
 
           <div className="space-y-2 md:col-span-2">
-            <Label>知识分区 / 标签</Label>
+            <Label>推荐分区 / 专题标签</Label>
             <Select
               value={domainTagSelectValue}
               onValueChange={(value) => {
@@ -464,23 +470,31 @@ export function CardEditor({ card, onSaved }: CardEditorProps) {
               }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="选择知识分区" />
+                <SelectValue placeholder="选择推荐分区" />
               </SelectTrigger>
               <SelectContent>
                 {KNOWLEDGE_DOMAIN_TAGS.map((tag) => (
-                  <SelectItem key={tag} value={tag}>
-                    {tag}
+                  <SelectItem key={tag} value={tag} className="py-2">
+                    <span className="flex flex-col gap-0.5">
+                      <span className="font-medium">{tag}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {KNOWLEDGE_DOMAIN_TAG_DESCRIPTIONS[tag]}
+                      </span>
+                    </span>
                   </SelectItem>
                 ))}
-                <SelectItem value={CUSTOM_DOMAIN_TAG}>自定义标签</SelectItem>
+                <SelectItem value={CUSTOM_DOMAIN_TAG}>自定义专题</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs leading-5 text-muted-foreground">
+              {domainTagDescription}
+            </p>
             {domainTagSelectValue === CUSTOM_DOMAIN_TAG && (
               <Input
                 id="domainTag"
                 value={form.domainTag}
                 onChange={(event) => updateField("domainTag", event.target.value)}
-                placeholder="输入自定义标签"
+                placeholder="例如：暑期选课、AI工具、临时政策"
               />
             )}
           </div>

@@ -4,7 +4,6 @@ import {
   KNOWLEDGE_ANSWER_MODES,
   SOURCE_TYPES,
   VERIFICATION_STATUSES,
-  KNOWLEDGE_DOMAIN_TAGS,
 } from "@/lib/knowledge/types";
 
 const trimmedRequired = (name: string, max = 2000) =>
@@ -55,9 +54,7 @@ export const cardCreateSchema = z.object({
   sourceDescription: trimmedRequired("来源说明", 500),
   sourceType: z.enum(SOURCE_TYPES),
   verificationStatus: z.enum(VERIFICATION_STATUSES),
-  domainTag: z.enum(KNOWLEDGE_DOMAIN_TAGS, {
-    error: `领域标签必须是 ${KNOWLEDGE_DOMAIN_TAGS.join("、")} 之一`,
-  }),
+  domainTag: trimmedRequired("领域标签", 40),
   action: z.enum(["create", "merge"]).optional(),
   mergeWithSummary: z.string().trim().max(200).nullish(),
 });

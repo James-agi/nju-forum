@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useState, type PointerEvent, type ReactNode, type WheelEvent } from "react";
+import Image from "next/image";
 import { ExternalLink, Maximize2, RotateCcw, ZoomIn, ZoomOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -566,11 +567,14 @@ function SourceImageFigure({ alt, src }: { alt: string; src: string }) {
             aria-label={`放大查看${alt ? `：${alt}` : "原文图片"}`}
             onClick={(event) => event.stopPropagation()}
           >
-            <img
+            <Image
               src={src}
               alt={alt}
+              width={1200}
+              height={800}
+              sizes="(min-width: 768px) 720px, 100vw"
               className="max-h-96 w-full object-contain transition group-hover:opacity-90"
-              loading="lazy"
+              unoptimized
             />
             <span className="absolute bottom-2 right-2 rounded-md bg-background/90 p-1 text-muted-foreground shadow-sm">
               <Maximize2 className="h-4 w-4" aria-hidden="true" />
@@ -629,9 +633,13 @@ function SourceImageFigure({ alt, src }: { alt: string; src: string }) {
             onPointerCancel={stopPan}
             style={{ cursor: zoom > 1 ? (dragStart ? "grabbing" : "grab") : "default" }}
           >
-            <img
+            <Image
               src={src}
               alt={alt}
+              width={1600}
+              height={1000}
+              sizes="92vw"
+              unoptimized
               className="max-h-[82vh] w-full select-none rounded-md object-contain transition-transform"
               draggable={false}
               style={{

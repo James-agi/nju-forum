@@ -95,7 +95,7 @@ const OUTPUT_CONTRACT = [
   '    "sourceUrls": ["URL1", "URL2"],',
   '    "sourceDescription": "带年份/版本的来源说明",',
   '    "sourceType": "OFFICIAL | DOCUMENT | SENIOR | AUTHOR_EXPERIENCE | OTHER",',
-  '    "domainTag": "选课规则 | 校园服务 | 院系结构 | 保研转专业 | 竞赛科研 | 生活指南 | 其他",',
+  '    "domainTag": "新生入学 | 课程学业 | 成绩学籍 | 专业院系 | 分流转专业 | 升学发展 | 科研竞赛 | 校园办事 | 网络系统 | 校园生活 | 校区交通 | 组织资源 | 其他，也可用简短自定义专题",',
   '    "verificationStatus": "NEEDS_REVIEW"',
   "  }",
   "]",

@@ -1,6 +1,8 @@
 import { SectionLabel } from "@/components/ui/section-label";
 import { QuestionBox } from "@/components/knowledge/question-box";
 
+export const dynamic = "force-dynamic";
+
 export default async function KnowledgePage() {
   return (
     <div className="container mx-auto max-w-5xl px-4 py-8">

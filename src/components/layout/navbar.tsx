@@ -21,6 +21,7 @@ import {
 import { ThemeToggle } from "@/components/forum/theme-toggle";
 import {
   BookOpen,
+  Clock3,
   HelpCircle,
   Inbox,
   Library,
@@ -106,6 +107,18 @@ export function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
+                    <Link href="/knowledge/cards">
+                      <Library className="mr-2 h-4 w-4" />
+                      知识卡片
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/knowledge/updates">
+                      <Clock3 className="mr-2 h-4 w-4" />
+                      最近更新
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
                     <Link href="/feedback">
                       <MessageSquare className="mr-2 h-4 w-4" />
                       意见反馈
@@ -118,12 +131,6 @@ export function Navbar() {
                         <Link href="/admin">
                           <Settings className="mr-2 h-4 w-4" />
                           管理后台
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href="/admin/knowledge">
-                          <Library className="mr-2 h-4 w-4" />
-                          知识卡片
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
@@ -218,6 +225,18 @@ export function Navbar() {
                       </Link>
                     </SheetClose>
                     <SheetClose asChild>
+                      <Link href="/knowledge/cards" className={drawerRow}>
+                        <Library className="h-4 w-4" />
+                        知识卡片
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
+                      <Link href="/knowledge/updates" className={drawerRow}>
+                        <Clock3 className="h-4 w-4" />
+                        最近更新
+                      </Link>
+                    </SheetClose>
+                    <SheetClose asChild>
                       <Link href="/feedback" className={drawerRow}>
                         <MessageSquare className="h-4 w-4" />
                         意见反馈
@@ -231,12 +250,6 @@ export function Navbar() {
                           <Link href="/admin" className={drawerRow}>
                             <Settings className="h-4 w-4" />
                             管理后台
-                          </Link>
-                        </SheetClose>
-                        <SheetClose asChild>
-                          <Link href="/admin/knowledge" className={drawerRow}>
-                            <Library className="h-4 w-4" />
-                            知识卡片
                           </Link>
                         </SheetClose>
                         <SheetClose asChild>

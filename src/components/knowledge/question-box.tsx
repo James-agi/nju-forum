@@ -1,18 +1,19 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties, type KeyboardEvent } from "react";
-import { Brain, ChevronDown, ChevronUp, ExternalLink, FilePlus2, Search, Send, ThumbsDown } from "lucide-react";
+import { useMemo, useState, type KeyboardEvent } from "react";
+import { Brain, ChevronDown, ChevronUp, ExternalLink, FilePlus2, Search, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { LinkifiedText, MarkdownText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
+import { FloatingCardsField } from "@/components/knowledge/floating-cards-field";
+import { UnsolvedButton } from "@/components/knowledge/unsolved-button";
 import {
   SOURCE_TYPE_LABELS,
   VERIFICATION_STATUS_LABELS,
   type AskResponse,
   type CitationDTO,
-  type DirectCardDTO,
 } from "@/lib/knowledge/types";
 
 type GroupedCitation = Omit<CitationDTO, "claimText"> & { claimTexts: string[] };
@@ -157,7 +158,12 @@ export function QuestionBox() {
       )}
 
       {answer?.status === "CARDS_FOUND" && (
-        <DirectCardsSurface response={answer} />
+        <FloatingCardsField
+          key={answer.questionId}
+          message={answer.message}
+          cards={answer.cards}
+          questionId={answer.questionId}
+        />
       )}
 
       {answer?.status === "ANSWERED" && (
@@ -232,134 +238,6 @@ function ModeButton({
         <span className="block truncate text-xs">{subtitle}</span>
       </span>
     </button>
-  );
-}
-
-function getCardPreview(body: string) {
-  const text = body
-    .replace(/[#*_>`\-\[\]()]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text.length > 150 ? `${text.slice(0, 150)}...` : text;
-}
-
-function DirectCardsSurface({
-  response,
-}: {
-  response: Extract<AskResponse, { status: "CARDS_FOUND" }>;
-}) {
-  return (
-    <section className="card-bubble-surface relative overflow-hidden border bg-card/80 px-4 py-6 shadow-sm md:-mx-8 md:px-6 md:py-8">
-      <div className="relative z-10 mx-auto mb-6 max-w-md text-center">
-        <Badge variant="secondary" className="mb-3">
-          <Search className="mr-1 h-3 w-3" />
-          不思考
-        </Badge>
-        <p className="text-sm leading-6 text-muted-foreground">{response.message}</p>
-      </div>
-
-      <div className="relative z-10 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(9rem,0.36fr)_minmax(0,1fr)] md:gap-4">
-        {response.cards.map((card, index) => (
-          <DirectCardBubble
-            key={card.cardId}
-            card={card}
-            index={index}
-            className={
-              index % 3 === 0
-                ? "md:col-start-1"
-                : index % 3 === 1
-                  ? "md:col-start-3"
-                  : "md:col-start-2"
-            }
-          />
-        ))}
-      </div>
-
-      <div className="relative z-10 mt-5">
-        <UnsolvedButton key={response.questionId} questionId={response.questionId} />
-      </div>
-    </section>
-  );
-}
-
-function DirectCardBubble({
-  card,
-  index,
-  className = "",
-}: {
-  card: DirectCardDTO;
-  index: number;
-  className?: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const visibleTerms = card.matchedTerms.slice(0, 4);
-
-  return (
-    <article
-      className={`knowledge-card-bubble border bg-background/90 p-4 shadow-sm backdrop-blur ${className}`}
-      style={{ "--bubble-index": index } as CSSProperties}
-    >
-      <div className="mb-2 flex flex-wrap gap-2">
-        <Badge variant="outline">{card.domainTag}</Badge>
-        <Badge variant="outline">{SOURCE_TYPE_LABELS[card.sourceType]}</Badge>
-        <Badge>{VERIFICATION_STATUS_LABELS[card.verificationStatus]}</Badge>
-      </div>
-
-      <h2 className="break-words text-sm font-semibold leading-6">
-        <LinkifiedText text={card.summary} />
-      </h2>
-      <p className="mt-2 break-words text-sm leading-6 text-muted-foreground">
-        <LinkifiedText text={getCardPreview(card.body)} />
-      </p>
-
-      {visibleTerms.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {visibleTerms.map((term) => (
-            <span
-              key={term}
-              className="border border-border px-1.5 py-0.5 text-[11px] leading-4 text-muted-foreground"
-            >
-              {term}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => setExpanded((value) => !value)}
-        >
-          {expanded ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
-          {expanded ? "收起卡片" : "展开卡片"}
-        </Button>
-        {card.sourceUrl && (
-          <Button asChild variant="ghost" size="sm">
-            <a href={card.sourceUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="mr-2 h-4 w-4" />
-              查看来源
-            </a>
-          </Button>
-        )}
-      </div>
-
-      {expanded && (
-        <div className="mt-3 space-y-3 border-t pt-3">
-          <MarkdownText
-            text={card.body}
-            className="rounded-md bg-muted/40 p-3 text-sm leading-6"
-          />
-          {card.sourceExcerpt && (
-            <SourceExcerptBlock sourceExcerpt={card.sourceExcerpt} />
-          )}
-          <p className="break-words text-sm text-muted-foreground">
-            <LinkifiedText text={card.sourceDescription} />
-          </p>
-        </div>
-      )}
-    </article>
   );
 }
 
@@ -465,88 +343,6 @@ function CitationItem({ citation }: { citation: GroupedCitation }) {
             </span>
           </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-function UnsolvedButton({ questionId }: { questionId: string }) {
-  const [state, setState] = useState<"idle" | "open" | "sending" | "done" | "error">("idle");
-  const [note, setNote] = useState("");
-
-  const submit = async (includeNote: boolean) => {
-    if (state === "sending" || state === "done") return;
-    setState("sending");
-    const body = includeNote ? { questionId, note } : { questionId };
-    try {
-      const res = await fetch("/api/knowledge/answer-feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      setState(res.ok ? "done" : "error");
-    } catch {
-      setState("error");
-    }
-  };
-
-  if (state === "done") {
-    return (
-      <p className="border-t pt-4 text-sm text-muted-foreground">
-        已记录，谢谢。你说的会帮作者补到卡片里。
-      </p>
-    );
-  }
-
-  if (state === "idle") {
-    return (
-      <div className="flex flex-col gap-1 border-t pt-4">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="self-start text-muted-foreground"
-          onClick={() => setState("open")}
-        >
-          <ThumbsDown className="mr-2 h-4 w-4" />
-          这没解决我的问题
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3 border-t pt-4">
-      <Textarea
-        value={note}
-        onChange={(event) => setNote(event.target.value)}
-        className="min-h-20"
-        placeholder="说一句哪里没解决？比如你其实想问的是…… 作者会照着补卡片。"
-        disabled={state === "sending"}
-      />
-      <p className="text-xs text-muted-foreground">可选填，留空也能交。</p>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => submit(true)}
-          disabled={state === "sending"}
-        >
-          {state === "sending" ? "提交中" : "提交反馈"}
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={() => submit(false)}
-          disabled={state === "sending"}
-        >
-          跳过，直接提交
-        </Button>
-      </div>
-      {state === "error" && (
-        <p className="text-sm text-destructive">反馈提交失败，请稍后重试。</p>
       )}
     </div>
   );

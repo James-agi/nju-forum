@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requireKnowledgeAuthor } from "@/lib/knowledge/authz";
+import { requireKnowledgeAuthor, requireKnowledgeUser } from "@/lib/knowledge/authz";
 import {
   cardUpdateSchema,
   formatValidationError,
@@ -20,6 +20,7 @@ function toCardDTO(card: {
   sourceDescription: string;
   sourceType: KnowledgeCardDTO["sourceType"];
   verificationStatus: KnowledgeCardDTO["verificationStatus"];
+  verifiedAt: Date | null;
   domainTag: string;
   createdAt: Date;
   updatedAt: Date;
@@ -33,6 +34,7 @@ function toCardDTO(card: {
     sourceDescription: card.sourceDescription,
     sourceType: card.sourceType,
     verificationStatus: card.verificationStatus,
+    verifiedAt: card.verifiedAt?.toISOString() ?? null,
     domainTag: card.domainTag,
     createdAt: card.createdAt.toISOString(),
     updatedAt: card.updatedAt.toISOString(),
@@ -44,7 +46,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const authz = await requireKnowledgeAuthor();
+    const authz = await requireKnowledgeUser();
     if (!authz.ok) return authz.response;
 
     const card = await db.knowledgeCard.findFirst({
@@ -93,8 +95,22 @@ export async function PATCH(
 
     const before = await db.knowledgeCard.findUnique({
       where: { id: params.id },
-      select: { summary: true, body: true, domainTag: true },
+      select: { summary: true, body: true, domainTag: true, verificationStatus: true },
     });
+    const verificationStatusChanged =
+      fields.verificationStatus !== undefined &&
+      fields.verificationStatus !== before?.verificationStatus;
+    const verificationSensitiveFieldsChanged =
+      fields.summary !== undefined ||
+      fields.body !== undefined ||
+      fields.sourceExcerpt !== undefined ||
+      hasSourceUrl ||
+      sourceUrls !== undefined ||
+      fields.sourceDescription !== undefined ||
+      fields.sourceType !== undefined ||
+      fields.domainTag !== undefined;
+    const nextVerificationStatus =
+      fields.verificationStatus ?? before?.verificationStatus;
 
     const card = await db.knowledgeCard.update({
       where: { id: params.id },
@@ -102,6 +118,12 @@ export async function PATCH(
         ...fields,
         sourceUrls: sourceUrls ? JSON.stringify(sourceUrls) : undefined,
         sourceUrl: hasSourceUrl ? fields.sourceUrl ?? null : undefined,
+        verifiedAt:
+          verificationStatusChanged || verificationSensitiveFieldsChanged
+          ? nextVerificationStatus === "VERIFIED"
+            ? new Date()
+            : null
+          : undefined,
         updatedById: authz.user.id,
         archivedAt:
           archive === true ? new Date() : archive === false ? null : undefined,
