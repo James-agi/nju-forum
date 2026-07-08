@@ -39,6 +39,10 @@ model Post {
   sectionId  String
   viewCount  Int        @default(0)
   replyCount Int        @default(0)
+  favoriteCount Int      @default(0)
+  lastReplyAt DateTime?
+  hotScore   Float      @default(0)
+  activeScore Float     @default(0)
   pinned     Boolean    @default(false)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
@@ -51,6 +55,10 @@ model Post {
   @@index([sectionId])
   @@index([authorId])
   @@index([createdAt])
+  @@index([pinned, createdAt, id])
+  @@index([sectionId, pinned, createdAt, id])
+  @@index([hotScore, createdAt, id])
+  @@index([activeScore, lastReplyAt, id])
 }
 
 model Reply {
@@ -69,6 +77,8 @@ model Reply {
   @@index([postId])
   @@index([authorId])
   @@index([parentId])
+  @@index([createdAt])
+  @@index([postId, createdAt, id])
 }
 
 model Section {
@@ -106,6 +116,7 @@ model KnowledgeCard {
   sourceDescription  String
   sourceType         SourceType
   verificationStatus VerificationStatus
+  verifiedAt         DateTime?
   domainTag          String
   createdById        String
   updatedById        String?
@@ -122,6 +133,7 @@ model KnowledgeCard {
 
   @@index([domainTag])
   @@index([verificationStatus])
+  @@index([verifiedAt])
   @@index([sourceType])
   @@index([archivedAt])
   @@index([createdById])
