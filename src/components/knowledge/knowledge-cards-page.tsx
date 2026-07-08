@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, Clock3, MessageSquareWarning, Search, Workflow, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,8 +34,10 @@ const EMPTY_STATUS_COUNTS: Record<VerificationStatusValue, number> = {
 
 export function KnowledgeCardsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
+  const showAdminTools = isAdmin && searchParams.get("mode") !== "view";
   const [cards, setCards] = useState<KnowledgeCardDTO[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [statusCounts, setStatusCounts] =
@@ -58,7 +60,7 @@ export function KnowledgeCardsPage() {
       params.set("page", String(page));
       if (query.trim()) params.set("q", query.trim());
       if (domainFilter !== ALL_FILTER_VALUE) params.set("domainTag", domainFilter);
-      if (verificationFilter !== ALL_FILTER_VALUE) {
+      if (showAdminTools && verificationFilter !== ALL_FILTER_VALUE) {
         params.set("verificationStatus", verificationFilter);
       }
 
@@ -78,7 +80,7 @@ export function KnowledgeCardsPage() {
     } finally {
       setLoading(false);
     }
-  }, [domainFilter, page, query, verificationFilter]);
+  }, [domainFilter, page, query, showAdminTools, verificationFilter]);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -125,9 +127,13 @@ export function KnowledgeCardsPage() {
   const currentPage = pagination?.page ?? page;
   const pageSize = pagination?.limit ?? 20;
   const totalCards = pagination?.total ?? 0;
-  const backHref = isAdmin ? "/admin" : "/knowledge";
-  const pageTitle = isAdmin ? "知识卡片管理" : "知识卡片";
-  const pageDescription = isAdmin
+  const hasActiveFilters =
+    Boolean(query) ||
+    domainFilter !== ALL_FILTER_VALUE ||
+    (showAdminTools && verificationFilter !== ALL_FILTER_VALUE);
+  const backHref = showAdminTools ? "/admin" : "/knowledge";
+  const pageTitle = showAdminTools ? "知识卡片管理" : "知识卡片";
+  const pageDescription = showAdminTools
     ? "录入可复用的校园知识，并保留来源与核实状态。"
     : "查看已收录的校园知识卡片，可按关键词、分区和核实状态筛选。";
 
@@ -174,7 +180,7 @@ export function KnowledgeCardsPage() {
                 最近更新
               </Link>
             </Button>
-            {isAdmin && (
+            {showAdminTools && (
               <>
                 <Button asChild variant="outline" size="sm">
                   <Link href="/admin/knowledge/batch">
@@ -193,7 +199,13 @@ export function KnowledgeCardsPage() {
           </div>
         </div>
 
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_180px_auto_auto]">
+        <div
+          className={
+            showAdminTools
+              ? "grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_180px_auto_auto]"
+              : "grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto_auto]"
+          }
+        >
           <Input
             value={query}
             onChange={(event) => {
@@ -221,6 +233,7 @@ export function KnowledgeCardsPage() {
               ))}
             </SelectContent>
           </Select>
+          {showAdminTools && (
           <Select
             value={verificationFilter}
             onValueChange={(value) => {
@@ -240,6 +253,7 @@ export function KnowledgeCardsPage() {
               ))}
             </SelectContent>
           </Select>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -250,7 +264,7 @@ export function KnowledgeCardsPage() {
           >
             <Search className="h-4 w-4" />
           </Button>
-          {(query || domainFilter !== ALL_FILTER_VALUE || verificationFilter !== ALL_FILTER_VALUE) && (
+          {hasActiveFilters && (
             <Button
               type="button"
               variant="ghost"
@@ -268,8 +282,8 @@ export function KnowledgeCardsPage() {
         </div>
       </div>
 
-      <div className={isAdmin ? "grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]" : "grid gap-6"}>
-        {isAdmin && (
+      <div className={showAdminTools ? "grid gap-6 lg:grid-cols-[minmax(0,420px)_1fr]" : "grid gap-6"}>
+        {showAdminTools && (
           <CardEditor
             card={editingCard}
             onSaved={() => {
@@ -285,7 +299,7 @@ export function KnowledgeCardsPage() {
               <span>
                 共 {totalCards} 张，当前第 {currentPage} / {totalPages} 页，每页 {pageSize} 张
               </span>
-              {VERIFICATION_STATUSES.map((status) => (
+              {showAdminTools && VERIFICATION_STATUSES.map((status) => (
                 <Button
                   key={status}
                   type="button"
@@ -300,7 +314,7 @@ export function KnowledgeCardsPage() {
                   {VERIFICATION_STATUS_LABELS[status]} {statusCounts[status] ?? 0}
                 </Button>
               ))}
-              {verificationFilter !== ALL_FILTER_VALUE && (
+              {showAdminTools && verificationFilter !== ALL_FILTER_VALUE && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -319,9 +333,9 @@ export function KnowledgeCardsPage() {
           <CardList
             cards={cards}
             loading={loading}
-            onEdit={isAdmin ? setEditingCard : undefined}
-            onArchive={isAdmin ? archiveCard : undefined}
-            onUpdated={isAdmin ? updateCardInList : undefined}
+            onEdit={showAdminTools ? setEditingCard : undefined}
+            onArchive={showAdminTools ? archiveCard : undefined}
+            onUpdated={showAdminTools ? updateCardInList : undefined}
           />
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-3 text-sm">
             <span className="text-muted-foreground">

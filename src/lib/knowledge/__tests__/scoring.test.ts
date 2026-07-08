@@ -77,4 +77,15 @@ describe("scoreCard", () => {
     const r2 = scoreCard(card, ["转专业"]);
     expect(r2.score).toBeGreaterThan(r1.score);
   });
+
+  it("scores source excerpts as low-weight searchable evidence", () => {
+    const card = makeCard({
+      summary: "转专业限制说明",
+      body: "正文没有写具体对象。",
+      sourceExcerpt: "部分专业如AI可能不接受大二转入。",
+    });
+    const result = scoreCard(card, ["ai"]);
+    expect(result.score).toBeGreaterThan(0);
+    expect(result.matchedTerms).toContain("ai");
+  });
 });

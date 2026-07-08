@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, ExternalLink, Mail } from "lucide-react";
 import { FeedbackArchiveButton } from "@/components/feedback/feedback-archive-button";
+import { FeedbackReplyForm } from "@/components/feedback/feedback-reply-form";
 import {
   FEEDBACK_CATEGORY_LABELS,
   type FeedbackCategory,
@@ -70,7 +71,10 @@ export default async function AdminFeedbackPage({
     where: { archivedAt: showArchived ? { not: null } : null },
     orderBy: { createdAt: "desc" },
     take: 200,
-    include: { user: { select: { name: true, email: true } } },
+    include: {
+      repliedBy: { select: { name: true } },
+      user: { select: { name: true, email: true } },
+    },
   });
 
   const pendingCount = await db.websiteFeedback.count({
@@ -134,6 +138,22 @@ export default async function AdminFeedbackPage({
                   {item.contact}
                 </p>
               )}
+              {item.replyContent && (
+                <div className="mt-4 rounded-md border bg-muted/30 p-3 text-sm">
+                  <div className="mb-2 text-xs text-muted-foreground">
+                    管理员回复
+                    {item.repliedAt && (
+                      <>
+                        {" · "}
+                        {new Date(item.repliedAt).toLocaleString("zh-CN")}
+                      </>
+                    )}
+                    {item.repliedBy?.name && <> · {item.repliedBy.name}</>}
+                  </div>
+                  <div className="whitespace-pre-wrap leading-6">{item.replyContent}</div>
+                </div>
+              )}
+              <FeedbackReplyForm id={item.id} initialReply={item.replyContent} />
             </div>
           ))}
         </div>

@@ -48,6 +48,42 @@ describe("extractRetrievalTerms", () => {
     expect(terms).toContain("保研课");
   });
 
+  it("keeps common major abbreviations as stable retrieval terms", async () => {
+    const terms = await extractRetrievalTerms("AI转CS失败后还能去天文吗");
+    expect(terms).toContain("ai");
+    expect(terms).toContain("cs");
+    expect(terms).toContain("计算机科学");
+    expect(terms).toContain("天文");
+    expect(terms).toContain("转专业");
+    expect(terms).toContain("转专业机会");
+  });
+
+  it("expands college and program nicknames", async () => {
+    const terms = await extractRetrievalTerms("智科和智软还有集电分别在哪个校区");
+    expect(terms).toContain("智能科学");
+    expect(terms).toContain("智能软件");
+    expect(terms).toContain("集成电路");
+    expect(terms).toContain("在哪个校区");
+  });
+
+  it("expands academic record and service nicknames", async () => {
+    const terms = await extractRetrievalTerms("GPA登错了要去ehall还是找教务");
+    expect(terms).toContain("gpa");
+    expect(terms).toContain("学分绩");
+    expect(terms).toContain("成绩更正");
+    expect(terms).toContain("ehall");
+    expect(terms).toContain("教务");
+  });
+
+  it("expands shopping-service wording to campus store terms", async () => {
+    const terms = await extractRetrievalTerms("学校里哪里能买点日用品");
+    expect(terms).toContain("教超");
+    expect(terms).toContain("教育超市");
+    expect(terms).toContain("便利店");
+    expect(terms).toContain("商铺");
+    expect(terms).toContain("日用品");
+  });
+
   it("limits output to 15 terms", async () => {
     // A very long question with many potential terms
     const terms = await extractRetrievalTerms(

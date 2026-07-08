@@ -23,5 +23,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "scripts/debug*.ts", "scripts/eval"]
+  "exclude": ["node_modules", "scripts/debug*.ts", "scripts/eval", "temp-*.ts"]
 }

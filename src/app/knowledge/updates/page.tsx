@@ -72,7 +72,7 @@ export default async function KnowledgeUpdatesPage({
           <div>
             <h1 className="text-2xl font-bold">知识卡片最近更新</h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-              展示近期新增、正文或摘要被修改、以及已核实卡片的近期维护；点击任意条目可查看卡片全文和来源。
+              展示近期新增、正文或摘要被修改的知识卡片；点击任意条目可查看卡片全文和来源，核实状态会作为徽标保留。
             </p>
           </div>
         </div>

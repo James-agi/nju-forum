@@ -3,7 +3,23 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { Search, Hash, Sun, Moon, PenSquare, User, MessageSquare, Inbox, Users } from "lucide-react";
+import {
+  BookOpen,
+  Clock3,
+  FileUp,
+  Hash,
+  Inbox,
+  Library,
+  MessageSquare,
+  Moon,
+  PenSquare,
+  Search,
+  Settings,
+  Sun,
+  User,
+  Users,
+  Workflow,
+} from "lucide-react";
 import {
   getAppliedTheme,
   listenThemeChange,
@@ -16,6 +32,7 @@ interface CommandItem {
   group: string;
   icon: React.ReactNode;
   shortcut?: string;
+  keywords?: string[];
   action: () => void;
 }
 
@@ -46,29 +63,47 @@ export function CommandPalette() {
   }, []);
 
   const items: CommandItem[] = [
-    { id: "search", label: "全站搜索", group: "导航", icon: <Search className="h-4 w-4" />, shortcut: "/search", action: () => { router.push("/search"); setOpen(false); } },
-    { id: "hot", label: "精选热帖", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/hot", action: () => { router.push("/forum?view=list"); setOpen(false); } },
-    { id: "cards", label: "卡片视图", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/cards", action: () => { router.push("/forum?view=card"); setOpen(false); } },
-    { id: "tags", label: "标签视图", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/tags", action: () => { router.push("/forum?view=tag"); setOpen(false); } },
-    { id: "topics", label: "主题视图", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/topics", action: () => { router.push("/forum?view=topic"); setOpen(false); } },
-    { id: "knowledge", label: "知识问答", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/knowledge", action: () => { router.push("/knowledge"); setOpen(false); } },
-    { id: "new", label: "发布新帖", group: "动作", icon: <PenSquare className="h-4 w-4" />, shortcut: "/new", action: () => { router.push("/forum/new"); setOpen(false); } },
-    { id: "theme", label: isDark ? "切换亮色模式" : "切换暗色模式", group: "动作", icon: isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />, action: toggleTheme },
-    { id: "profile", label: "个人设置", group: "动作", icon: <User className="h-4 w-4" />, shortcut: "/profile", action: () => { router.push("/user/profile"); setOpen(false); } },
-    { id: "feedback", label: "意见反馈", group: "动作", icon: <MessageSquare className="h-4 w-4" />, shortcut: "/feedback", action: () => { router.push("/feedback"); setOpen(false); } },
+    { id: "search", label: "全站搜索", group: "导航", icon: <Search className="h-4 w-4" />, shortcut: "/search", keywords: ["/search"], action: () => { router.push("/search"); setOpen(false); } },
+    { id: "hot", label: "精选热帖", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/hot", keywords: ["/hot", "/forum?view=list"], action: () => { router.push("/forum?view=list"); setOpen(false); } },
+    { id: "cards", label: "卡片视图", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/cards", keywords: ["/cards", "/forum?view=card"], action: () => { router.push("/forum?view=card"); setOpen(false); } },
+    { id: "tags", label: "标签视图", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/tags", keywords: ["/tags", "/forum?view=tag"], action: () => { router.push("/forum?view=tag"); setOpen(false); } },
+    { id: "topics", label: "主题视图", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/topics", keywords: ["/topics", "/forum?view=topic"], action: () => { router.push("/forum?view=topic"); setOpen(false); } },
+    { id: "knowledge", label: "知识问答", group: "导航", icon: <Hash className="h-4 w-4" />, shortcut: "/knowledge", keywords: ["/knowledge"], action: () => { router.push("/knowledge"); setOpen(false); } },
+    { id: "knowledge-cards", label: "知识卡片库", group: "知识库", icon: <Library className="h-4 w-4" />, shortcut: "/kb", keywords: ["/knowledge/cards"], action: () => { router.push("/knowledge/cards?mode=view"); setOpen(false); } },
+    { id: "knowledge-updates", label: "知识卡片最近更新", group: "知识库", icon: <Clock3 className="h-4 w-4" />, shortcut: "/updates", keywords: ["/knowledge/updates"], action: () => { router.push("/knowledge/updates"); setOpen(false); } },
+    { id: "material-submit", label: "提交资料", group: "资料共建", icon: <FileUp className="h-4 w-4" />, shortcut: "/form", keywords: ["/submit", "/feedback?mode=material"], action: () => { router.push("/feedback?mode=material"); setOpen(false); } },
+    { id: "new", label: "发布新帖", group: "动作", icon: <PenSquare className="h-4 w-4" />, shortcut: "/new", keywords: ["/new", "/forum/new"], action: () => { router.push("/forum/new"); setOpen(false); } },
+    { id: "theme", label: isDark ? "切换亮色模式" : "切换暗色模式", group: "动作", icon: isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />, shortcut: "/theme", keywords: ["dark", "light"], action: toggleTheme },
+    { id: "profile", label: "个人设置", group: "动作", icon: <User className="h-4 w-4" />, shortcut: "/profile", keywords: ["/profile", "/user/profile"], action: () => { router.push("/user/profile"); setOpen(false); } },
+    { id: "feedback", label: "意见反馈", group: "动作", icon: <MessageSquare className="h-4 w-4" />, shortcut: "/feedback", keywords: ["/feedback"], action: () => { router.push("/feedback"); setOpen(false); } },
     ...(isAdmin
       ? [
-          { id: "admin-feedback", label: "反馈管理", group: "管理", icon: <Inbox className="h-4 w-4" />, shortcut: "/admin/feedback", action: () => { router.push("/admin/feedback"); setOpen(false); } },
-          { id: "admin-users", label: "用户管理", group: "管理", icon: <Users className="h-4 w-4" />, shortcut: "/admin/users", action: () => { router.push("/admin/users"); setOpen(false); } },
+          { id: "admin-home", label: "管理后台", group: "管理", icon: <Settings className="h-4 w-4" />, shortcut: "/admin", keywords: ["/admin"], action: () => { router.push("/admin"); setOpen(false); } },
+          { id: "admin-knowledge", label: "知识卡片管理", group: "管理", icon: <BookOpen className="h-4 w-4" />, shortcut: "/manage", keywords: ["/admin/knowledge"], action: () => { router.push("/admin/knowledge"); setOpen(false); } },
+          { id: "admin-knowledge-batch", label: "批量制卡", group: "管理", icon: <Workflow className="h-4 w-4" />, shortcut: "/batch", keywords: ["/admin/knowledge/batch"], action: () => { router.push("/admin/knowledge/batch"); setOpen(false); } },
+          { id: "admin-gaps", label: "缺口库", group: "管理", icon: <Inbox className="h-4 w-4" />, shortcut: "/gaps", keywords: ["/admin/gaps"], action: () => { router.push("/admin/gaps"); setOpen(false); } },
+          { id: "admin-answer-feedback", label: "没解决反馈", group: "管理", icon: <MessageSquare className="h-4 w-4" />, shortcut: "/unsolved", keywords: ["/admin/knowledge/feedback"], action: () => { router.push("/admin/knowledge/feedback"); setOpen(false); } },
+          { id: "admin-feedback", label: "反馈管理", group: "管理", icon: <Inbox className="h-4 w-4" />, shortcut: "/fb-admin", keywords: ["/admin/feedback"], action: () => { router.push("/admin/feedback"); setOpen(false); } },
+          { id: "admin-users", label: "用户管理", group: "管理", icon: <Users className="h-4 w-4" />, shortcut: "/users", keywords: ["/admin/users"], action: () => { router.push("/admin/users"); setOpen(false); } },
         ]
       : []),
   ];
 
-  const filtered = query
-    ? items.filter((item) =>
-        item.label.toLowerCase().includes(query.toLowerCase()) ||
-        (item.shortcut && item.shortcut.toLowerCase().includes(query.toLowerCase()))
-      )
+  const normalizedQuery = query.trim().toLowerCase();
+  const isExactCommand = (item: CommandItem) =>
+    item.shortcut?.toLowerCase() === normalizedQuery ||
+    item.keywords?.some((keyword) => keyword.toLowerCase() === normalizedQuery);
+
+  const filtered = normalizedQuery
+    ? items
+        .filter((item) =>
+          item.label.toLowerCase().includes(normalizedQuery) ||
+          (item.shortcut && item.shortcut.toLowerCase().includes(normalizedQuery)) ||
+          item.keywords?.some((keyword) =>
+            keyword.toLowerCase().includes(normalizedQuery)
+          )
+        )
+        .sort((a, b) => Number(isExactCommand(b)) - Number(isExactCommand(a)))
     : items;
 
   const groups = Array.from(new Set(filtered.map((i) => i.group)));

@@ -27,6 +27,7 @@ model User {
   replies                  Reply[]
   contributionEvents       ContributionEvent[]       @relation("ContributionRecipient")
   contributionsAwarded     ContributionEvent[]       @relation("ContributionAwardedBy")
+  feedbackReplies          WebsiteFeedback[]         @relation("WebsiteFeedbackRepliedBy")
   websiteFeedbacks         WebsiteFeedback[]
 }
 
@@ -272,18 +273,23 @@ model KnowledgeConversation {
 }
 
 model WebsiteFeedback {
-  id         String   @id @default(cuid())
-  userId     String
-  category   String
-  content    String
-  contact    String?
-  createdAt  DateTime @default(now())
-  archivedAt DateTime?
-  user       User     @relation(fields: [userId], references: [id])
+  id            String    @id @default(cuid())
+  userId        String
+  category      String
+  content       String
+  contact       String?
+  replyContent  String?
+  repliedAt     DateTime?
+  repliedById   String?
+  createdAt     DateTime  @default(now())
+  archivedAt    DateTime?
+  repliedBy     User?     @relation("WebsiteFeedbackRepliedBy", fields: [repliedById], references: [id])
+  user          User      @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([createdAt])
   @@index([archivedAt])
+  @@index([repliedById])
 }
 
 model ContributionEvent {

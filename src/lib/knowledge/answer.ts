@@ -18,8 +18,13 @@ export interface CardBoundedAnswer {
 }
 
 const SYSTEM_PROMPT =
-  "你是 NJU 知识库的溯源问答助手。你的角色仅限于基于提供的知识卡片回答问题。" +
+  "你是 NJU 知识库的溯源问答助手。你的角色仅限于基于提供的知识卡片和证据片段回答问题。" +
   "绝对不能使用通用知识、猜测或补全缺失信息。如果卡片信息不足，如实说明。" +
+  "如果 evidenceChunks 存在，必须优先依据 evidenceChunks 中的具体片段作答；整张卡片正文只能作为理解上下文，不能用来发散补全片段未支持的结论。" +
+  "不能把卡片里的适用对象、专业、大类、年级或校区假定成用户本人情况；如果卡片只适用于特定对象，必须写成“如果你属于该对象”。" +
+  "如果用户没有说明校区，而证据卡片只覆盖某一个校区，不能把该校区地点当作直接答案；必须说明“这张卡只覆盖某校区”，并建议用户补充校区。" +
+  "如果证据卡片覆盖多个校区或同时包含通用卡和单校区卡，必须综合多张卡，按校区或适用范围分别归纳，不能只回答第一张卡。" +
+  "如果不同卡片存在限制或例外，必须优先保留限制条件，不能给出与限制相反的确定建议。" +
   "如果问题询问实时状态、当天情况、年度变化、具体余量或精确数值，而卡片只提供一般规则/路径，只能回答一般信息和查询路径，并明确说明不能确认实时或个人化结果。" +
   "输出严格 JSON：{\"answer\":\"...\",\"citations\":[{\"cardId\":\"...\",\"claimText\":\"...\"}]}。" +
   "每个实质结论必须有 citation。" +
@@ -34,6 +39,7 @@ const LIMITED_ANSWER_PATTERNS = [
 
 const LIMITED_ANSWER_NOTE =
   "注意：这个问题包含实时、年度变化或精确细节。知识库只能提供已有卡片里的通用信息和查询路径，不能确认实时状态、个人数据或当年最终结果。";
+const LOCATION_TERMS = ["鼓楼", "仙林", "浦口", "苏州"];
 
 function needsLimitedAnswerNote(question: string) {
   return LIMITED_ANSWER_PATTERNS.some((pattern) => pattern.test(question));
@@ -45,6 +51,44 @@ function appendLimitedAnswerNote(question: string, answer: string) {
   return `${answer}\n\n${LIMITED_ANSWER_NOTE}`;
 }
 
+function includesTerm(text: string, term: string) {
+  return text.toLowerCase().includes(term.toLowerCase());
+}
+
+function locationsIn(text: string) {
+  return LOCATION_TERMS.filter((term) => includesTerm(text, term));
+}
+
+function evidenceLocationScope(evidence: RetrievalResult[]) {
+  const locations = new Set<string>();
+
+  for (const result of evidence) {
+    const text = result.evidenceChunks?.length
+      ? [
+          result.card.summary,
+          ...result.evidenceChunks.map((chunk) => `${chunk.sectionTitle || ""}\n${chunk.text}`),
+        ].join("\n")
+      : `${result.card.summary}\n${result.card.body}`;
+    locationsIn(text).forEach((location) => locations.add(location));
+  }
+
+  return Array.from(locations);
+}
+
+function appendSingleCampusScopeNote(question: string, answer: string, evidence: RetrievalResult[]) {
+  if (LOCATION_TERMS.some((location) => includesTerm(question, location))) return answer;
+  if (answer.includes("范围提示")) return answer;
+
+  const locations = evidenceLocationScope(evidence);
+  if (locations.length !== 1) return answer;
+
+  return `${answer}\n\n范围提示：以上依据主要覆盖${locations[0]}校区；如果你问的是其他校区，需要补充校区或查对应卡片，不能直接把这条规则推广到所有校区。`;
+}
+
+function finalizeAnswerText(question: string, answer: string, evidence: RetrievalResult[]) {
+  return appendSingleCampusScopeNote(question, appendLimitedAnswerNote(question, answer), evidence);
+}
+
 function trimForAnswer(text: string, maxLength = 320) {
   const compact = text.replace(/\s+/g, " ").trim();
   if (compact.length <= maxLength) return compact;
@@ -53,13 +97,17 @@ function trimForAnswer(text: string, maxLength = 320) {
 
 function buildDeterministicAnswer(question: string, evidence: RetrievalResult[]): CardBoundedAnswer {
   const lines = evidence.map((result, index) => {
-    return `${index + 1}. ${result.card.summary}：${trimForAnswer(result.card.body)}`;
+    const chunkText = result.evidenceChunks?.length
+      ? result.evidenceChunks.map((chunk) => trimForAnswer(chunk.text, 220)).join(" / ")
+      : trimForAnswer(result.card.body);
+    return `${index + 1}. ${result.card.summary}：${chunkText}`;
   });
 
   return {
-    answerText: appendLimitedAnswerNote(
+    answerText: finalizeAnswerText(
       question,
       `根据知识库中可引用的卡片，针对「${question}」目前只能确认：\n${lines.join("\n")}`,
+      evidence,
     ),
     citations: evidence.map((result) => ({
       cardId: result.card.id,
@@ -88,7 +136,13 @@ export async function buildCardBoundedAnswer(
     const evidencePayload = evidence.map((result) => ({
       cardId: result.card.id,
       summary: result.card.summary,
-      body: result.card.body,
+      body: result.evidenceChunks?.length ? trimForAnswer(result.card.body, 500) : result.card.body,
+      evidenceChunks: result.evidenceChunks?.map((chunk) => ({
+        chunkId: chunk.chunkId,
+        sectionTitle: chunk.sectionTitle,
+        text: chunk.text,
+        matchedTerms: chunk.matchedTerms,
+      })) || [],
       sourceDescription: result.card.sourceDescription,
       sourceType: result.card.sourceType,
       verificationStatus: result.card.verificationStatus,
@@ -159,7 +213,7 @@ export async function buildCardBoundedAnswer(
   }
 
   return {
-    answerText: appendLimitedAnswerNote(question, parsed.answer.trim()),
+    answerText: finalizeAnswerText(question, parsed.answer.trim(), evidence),
     citations,
     answerMode: "LLM",
   };

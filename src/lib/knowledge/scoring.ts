@@ -21,6 +21,7 @@ function scTerm(t: string, f: string): number {
 export function scoreCard(card: RetrievalCard, terms: string[]): { score: number; matchedTerms: string[] } {
   const sm = card.summary.toLowerCase();
   const bd = card.body.toLowerCase();
+  const ex = (card.sourceExcerpt ?? "").toLowerCase();
   const dm = card.domainTag.toLowerCase();
   const sd = card.sourceDescription.toLowerCase();
   const mt: string[] = [];
@@ -36,6 +37,10 @@ export function scoreCard(card: RetrievalCard, terms: string[]): { score: number
     }
     if (bd.includes(nt)) {
       sc += scTerm(nt, "body");
+      m = true;
+    }
+    if (ex.includes(nt)) {
+      sc += scTerm(nt, "excerpt");
       m = true;
     }
     if (dm.includes(nt)) {

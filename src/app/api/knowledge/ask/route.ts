@@ -155,7 +155,7 @@ export async function POST(req: Request) {
       cardsCount: evidence.cards.length,
     });
 
-    if (responseMode === "cards" && retrieval.length > 0) {
+    if (responseMode === "cards" && evidence.sufficient) {
       trace.setAnswer({ durationMs: 0 });
 
       const question = await db.knowledgeQuestion.create({
@@ -171,8 +171,8 @@ export async function POST(req: Request) {
       const response: AskResponse = {
         status: "CARDS_FOUND",
         questionId: question.id,
-        cards: retrieval.slice(0, 5).map(toDirectCardDTO),
-        message: "找到这些相关卡片，先把原始材料浮上来给你看。",
+        cards: evidence.cards.map(toDirectCardDTO),
+        message: "找到这些可引用卡片，先把原始材料浮上来给你看。",
       };
 
       return NextResponse.json(response);

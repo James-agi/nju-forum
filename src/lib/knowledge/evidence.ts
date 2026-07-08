@@ -1,5 +1,6 @@
 import type { RetrievalResult } from "@/lib/knowledge/types-internal";
 import { isSpec } from "@/lib/knowledge/scoring";
+import { attachEvidenceChunks } from "@/lib/knowledge/chunk-retrieval";
 import {
   MIN_SUFFICIENT_SCORE,
   MIN_STRONG_TERM_COUNT,
@@ -19,6 +20,31 @@ const FALSE_POSITIVE_PREFIXES: Record<string, string[]> = {
 };
 
 const LOCATION_TERMS = ["鼓楼", "仙林", "浦口", "苏州"];
+const LOCATION_SENSITIVE_SERVICE_TERMS = [
+  "洗衣",
+  "洗衣店",
+  "理发",
+  "理发店",
+  "剪头发",
+  "打印",
+  "打印店",
+  "快递",
+  "外卖",
+  "食堂",
+  "修车",
+  "自行车",
+  "修理",
+  "修理铺",
+  "浴室",
+  "洗浴",
+  "教超",
+  "教育超市",
+  "便利店",
+  "商铺",
+  "日用品",
+  "生活用品",
+  "日化用品",
+];
 const MIN_LIMITED_BROAD_SCORE = 3;
 const MIN_DIRECT_TITLE_SCORE = 6;
 const NON_EVIDENCE_TERMS = new Set([
@@ -28,6 +54,7 @@ const NON_EVIDENCE_TERMS = new Set([
   "南京",
   "大学",
   "学校",
+  "专业",
   "校区",
   "校园",
   "哪里",
@@ -40,6 +67,21 @@ const NON_EVIDENCE_TERMS = new Set([
   "一般",
   "到底",
   "老师",
+  "某门课",
+  "谁教",
+  "自己",
+  "通常",
+  "解决",
+  "学生",
+  "已经",
+  "普通",
+  "不会",
+  "麻烦",
+  "消息",
+  "这边",
+  "这事",
+  "事情",
+  "先别",
   "收到",
   "不知",
   "不知道",
@@ -59,12 +101,33 @@ const NON_EVIDENCE_TERMS = new Set([
   "相关",
   "问题",
 ]);
+const ORIGINAL_ANCHOR_STOP_TERMS = new Set([
+  "校外",
+  "校外人员",
+  "人员",
+  "入馆",
+  "进馆",
+  "访问",
+  "进入",
+  "能不能",
+  "可不可以",
+  "是不是",
+  "怎么办",
+  "去哪",
+  "哪里",
+  "哪儿",
+]);
 const DIRECT_TITLE_ANCHORS = new Set([
   "缴费",
   "学费",
   "缓考",
   "体育",
   "体育课",
+  "选课",
+  "初选",
+  "退补选",
+  "培养方案",
+  "通识课",
   "校园网",
   "vpn",
   "eduroam",
@@ -116,6 +179,8 @@ const DIRECT_TITLE_ANCHORS = new Set([
   "录错",
   "申诉",
   "拔尖班",
+  "拔尖",
+  "退出",
   "面试",
   "求助",
   "部门",
@@ -128,6 +193,27 @@ const DIRECT_TITLE_ANCHORS = new Set([
   "校区归属",
   "计算机",
   "计算机类",
+  "同代码",
+  "南京校区",
+  "课程体系",
+  "退课",
+  "教超",
+  "教育超市",
+  "便利店",
+  "商铺",
+  "日用品",
+  "生活用品",
+  "日化用品",
+  "因病",
+  "发烧",
+  "修车",
+  "进组",
+  "图书馆",
+  "校医院",
+  "医保",
+  "宿舍",
+  "校园卡",
+  "饭卡",
 ]);
 const LIMITED_DETAIL_PATTERNS = [
   /今天|明天|今晚|现在|当前|实时|最新|今年|本学期|下学期/,
@@ -163,7 +249,13 @@ function missesRequiredLocationConstraint(result: RetrievalResult) {
   if (queryLocations.length === 0) return false;
 
   const matched = new Set(result.matchedTerms);
-  return queryLocations.some((term) => !matched.has(term));
+  if (queryLocations.some((term) => !matched.has(term))) return true;
+
+  const summary = result.card.summary.toLowerCase();
+  const summaryLocations = LOCATION_TERMS.filter((term) => includesReliableTerm(summary, term));
+  if (summaryLocations.length === 0) return false;
+
+  return !summaryLocations.some((term) => queryLocations.includes(term));
 }
 
 function isLimitedDetailQuery(result: RetrievalResult) {
@@ -179,9 +271,52 @@ function isDirectTitleAnchor(term: string) {
   return DIRECT_TITLE_ANCHORS.has(term.toLowerCase());
 }
 
+function hasQueryLocation(result: RetrievalResult) {
+  return (result.queryTerms || []).some((term) => LOCATION_TERMS.includes(term));
+}
+
+function isLocationSensitiveServiceQuery(result: RetrievalResult) {
+  return (result.queryTerms || []).some((term) => LOCATION_SENSITIVE_SERVICE_TERMS.includes(term));
+}
+
+function hasLocationInSummary(result: RetrievalResult) {
+  const summary = result.card.summary.toLowerCase();
+  return LOCATION_TERMS.some((term) => includesReliableTerm(summary, term));
+}
+
+function isOriginalCoreAnchor(term: string) {
+  const normalized = term.toLowerCase();
+  if (LOCATION_TERMS.includes(term)) return false;
+  if (NON_EVIDENCE_TERMS.has(normalized) || ORIGINAL_ANCHOR_STOP_TERMS.has(normalized)) return false;
+  return isSpec(normalized);
+}
+
+function missesOriginalCoreAnchor(result: RetrievalResult) {
+  const originalCoreAnchors = (result.originalQueryTerms || []).filter(isOriginalCoreAnchor);
+  if (originalCoreAnchors.length === 0) return false;
+
+  const matched = new Set(result.matchedTerms.map((term) => term.toLowerCase()));
+  return !originalCoreAnchors.some((term) => matched.has(term.toLowerCase()));
+}
+
+function isLocationServiceWithoutQueryLocation(results: RetrievalResult[]) {
+  return results.some((result) => (
+    isLocationSensitiveServiceQuery(result) && !hasQueryLocation(result)
+  ));
+}
+
+function prioritizeLocationServiceEvidence(results: RetrievalResult[]) {
+  if (!isLocationServiceWithoutQueryLocation(results)) return results;
+
+  const neutral = results.filter((result) => !hasLocationInSummary(result));
+  const located = results.filter(hasLocationInSummary);
+  return [...neutral, ...located];
+}
+
 function hasLimitedBroadEvidence(result: RetrievalResult) {
   if (result.card.verificationStatus !== "VERIFIED") return false;
   if (missesRequiredLocationConstraint(result)) return false;
+  if (missesOriginalCoreAnchor(result)) return false;
   if (!isLimitedDetailQuery(result)) return false;
   if (result.score < MIN_LIMITED_BROAD_SCORE) return false;
   return result.matchedTerms.some(isDomainAnchor);
@@ -219,6 +354,7 @@ function hasSectionEvidence(result: RetrievalResult, contentStrongTerms: string[
 
 function hasStrongEvidence(result: RetrievalResult) {
   if (missesRequiredLocationConstraint(result)) return false;
+  if (missesOriginalCoreAnchor(result)) return false;
 
   const summary = result.card.summary.toLowerCase();
   const body = result.card.body.toLowerCase();
@@ -241,6 +377,7 @@ function hasStrongEvidence(result: RetrievalResult) {
 function hasDirectTitleEvidence(result: RetrievalResult) {
   if (result.card.verificationStatus !== "VERIFIED") return false;
   if (missesRequiredLocationConstraint(result)) return false;
+  if (missesOriginalCoreAnchor(result)) return false;
   if (result.score < MIN_DIRECT_TITLE_SCORE) return false;
 
   const summary = result.card.summary.toLowerCase();
@@ -266,9 +403,12 @@ export function evaluateEvidence(results: RetrievalResult[]): EvidenceEvaluation
     return { sufficient: false, reason: "UNRELATED", cards: [] };
   }
 
-  const topScore = strongActive[0]?.score ?? 0;
-  const minUsableScore = Math.max(MIN_SINGLE_ANCHOR_SCORE, topScore - EVIDENCE_SCORE_DIFF);
-  const usable = strongActive
+  const preferredStrongActive = prioritizeLocationServiceEvidence(strongActive);
+  const topScore = preferredStrongActive[0]?.score ?? 0;
+  const minUsableScore = isLocationServiceWithoutQueryLocation(preferredStrongActive)
+    ? MIN_DIRECT_TITLE_SCORE
+    : Math.max(MIN_SINGLE_ANCHOR_SCORE, topScore - EVIDENCE_SCORE_DIFF);
+  const usable = preferredStrongActive
     .filter((r, index) => (index === 0 || r.score >= minUsableScore) && hasUsableEvidence(r))
     .slice(0, EVIDENCE_MAX_USABLE);
 
@@ -276,5 +416,5 @@ export function evaluateEvidence(results: RetrievalResult[]): EvidenceEvaluation
     return { sufficient: false, reason: "NEEDS_REVIEW", cards: [] };
   }
 
-  return { sufficient: true, reason: "PREFILTER_PASSED", cards: usable };
+  return { sufficient: true, reason: "PREFILTER_PASSED", cards: usable.map((result) => attachEvidenceChunks(result)) };
 }

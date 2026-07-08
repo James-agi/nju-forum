@@ -225,6 +225,10 @@ describe("classifyNoResult", () => {
     expect(classifyNoResult("南大图书馆几点关门")).toBe("GAP_RECORDED");
   });
 
+  it("returns GAP_RECORDED for campus academic questions without enough evidence", () => {
+    expect(classifyNoResult("今年某门课具体谁教")).toBe("GAP_RECORDED");
+  });
+
   it("returns OUT_OF_SCOPE for non-NJU question", () => {
     expect(classifyNoResult("今天天气怎么样")).toBe("OUT_OF_SCOPE");
   });

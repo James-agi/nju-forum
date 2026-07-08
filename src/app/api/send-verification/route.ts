@@ -1,14 +1,29 @@
 import { randomInt } from "crypto";
 import { NextResponse } from "next/server";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 import { db } from "@/lib/db";
+
+export const runtime = "nodejs";
 
 const SUCCESS_MESSAGE = "验证码已发送";
 const IP_WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_IP_WINDOW = 5;
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const ipBuckets = new Map<string, { count: number; resetAt: number }>();
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function getMailConfig() {
+  const host = process.env.ALIYUN_SMTP_HOST || "smtpdm.aliyun.com";
+  const port = Number(process.env.ALIYUN_SMTP_PORT || "465");
+  const user = process.env.ALIYUN_SMTP_USER;
+  const pass = process.env.ALIYUN_SMTP_PASS;
+  const from = process.env.ALIYUN_SMTP_FROM;
+
+  if (!host || !Number.isInteger(port) || !user || !pass || !from) {
+    return null;
+  }
+
+  return { host, port, user, pass, from };
+}
 
 export async function POST(req: Request) {
   try {
@@ -55,7 +70,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: SUCCESS_MESSAGE });
     }
 
-    if (!resend || !process.env.RESEND_FROM) {
+    const mailConfig = getMailConfig();
+
+    if (!mailConfig) {
       return NextResponse.json({ error: "邮件服务未配置" }, { status: 500 });
     }
 
@@ -79,15 +96,26 @@ export async function POST(req: Request) {
       },
     });
 
-    const { error: sendError } = await resend.emails.send({
-      from: process.env.RESEND_FROM,
-      to: email,
-      subject: "知南注册验证码",
-      html: `<div><p>你的验证码是 <strong>${code}</strong></p><p>10 分钟内有效。</p></div>`,
+    const transporter = nodemailer.createTransport({
+      host: mailConfig.host,
+      port: mailConfig.port,
+      secure: mailConfig.port === 465,
+      auth: {
+        user: mailConfig.user,
+        pass: mailConfig.pass,
+      },
     });
 
-    if (sendError) {
-      console.error("Resend send failed:", sendError);
+    try {
+      await transporter.sendMail({
+        from: mailConfig.from,
+        to: email,
+        subject: "知南注册验证码",
+        text: `你的验证码是 ${code}\n10 分钟内有效。`,
+        html: `<div><p>你的验证码是 <strong>${code}</strong></p><p>10 分钟内有效。</p></div>`,
+      });
+    } catch (sendError) {
+      console.error("Aliyun SMTP send failed:", sendError);
       await db.verificationCode.deleteMany({ where: { email } });
       return NextResponse.json({ error: "验证码发送失败，请稍后再试" }, { status: 500 });
     }

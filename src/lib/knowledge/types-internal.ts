@@ -11,4 +11,16 @@ export interface RetrievalResult {
   score: number;
   matchedTerms: string[];
   queryTerms?: string[];
+  originalQueryTerms?: string[];
+  evidenceChunks?: EvidenceChunk[];
+}
+
+export interface EvidenceChunk {
+  chunkId: string;
+  cardId: string;
+  index: number;
+  text: string;
+  sectionTitle?: string;
+  score: number;
+  matchedTerms: string[];
 }

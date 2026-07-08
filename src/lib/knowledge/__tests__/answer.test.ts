@@ -47,4 +47,57 @@ describe("buildCardBoundedAnswer", () => {
 
     expect(answer.answerText).not.toContain("通用信息和查询路径");
   });
+
+  it("uses evidence chunks in fallback mode when available", async () => {
+    const result = makeResult();
+    result.card.body = "第一段：无关背景。\n\n第二段：鼓楼到浦口可以参考公共交通。";
+    result.evidenceChunks = [
+      {
+        chunkId: "card-1#chunk-2",
+        cardId: "card-1",
+        index: 1,
+        text: "第二段：鼓楼到浦口可以参考公共交通。",
+        score: 12,
+        matchedTerms: ["鼓楼", "浦口"],
+      },
+    ];
+
+    const answer = await buildCardBoundedAnswer("鼓楼到浦口怎么通勤", [result]);
+
+    expect(answer.answerText).toContain("第二段");
+    expect(answer.answerText).not.toContain("第一段");
+  });
+
+  it("adds a scope note when an unspecified-campus question only has one campus evidence", async () => {
+    const result = makeResult();
+    result.card.id = "xianlin-dorm-electricity";
+    result.card.summary = "仙林宿舍：宿舍号看楼层，电费避开 22:40-0:00 线上充值";
+    result.card.body = "仙林宿舍没电时，先检查门外墙上的电闸，再通过信息门户或南大 APP 充值。";
+    result.evidenceChunks = [
+      {
+        chunkId: "xianlin-dorm-electricity#chunk-1",
+        cardId: "xianlin-dorm-electricity",
+        index: 0,
+        text: "宿舍没电时，先检查门外墙上的电闸，再通过信息门户或南大 APP 充值。",
+        score: 12,
+        matchedTerms: ["宿舍", "没电"],
+      },
+    ];
+
+    const answer = await buildCardBoundedAnswer("宿舍没电了是找宿管还是自己缴费", [result]);
+
+    expect(answer.answerText).toContain("范围提示");
+    expect(answer.answerText).toContain("主要覆盖仙林校区");
+    expect(answer.answerText).toContain("不能直接把这条规则推广到所有校区");
+  });
+
+  it("does not add a single-campus scope note when the question already names that campus", async () => {
+    const result = makeResult();
+    result.card.summary = "仙林宿舍：宿舍号看楼层，电费避开 22:40-0:00 线上充值";
+    result.card.body = "仙林宿舍没电时，先检查门外墙上的电闸，再通过信息门户或南大 APP 充值。";
+
+    const answer = await buildCardBoundedAnswer("仙林宿舍没电了怎么办", [result]);
+
+    expect(answer.answerText).not.toContain("范围提示");
+  });
 });

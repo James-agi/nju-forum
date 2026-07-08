@@ -18,7 +18,6 @@ export const USER_REFILL_RATE = 20 / 60;
 export const RATE_LIMIT_WINDOW_MS = 60_000;
 
 // Retrieval
-export const KEYWORD_RETRIEVAL_LIMIT = 50;
 export const KEYWORD_TOP_CUT = 20;
 export const MAX_TERMS = 15;
 export const MAX_MERGED_TERMS = 20;

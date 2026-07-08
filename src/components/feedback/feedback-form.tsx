@@ -1,8 +1,9 @@
 "use client";
 
 import type { ChangeEvent } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   CheckCircle2,
   FileUp,
@@ -47,7 +48,10 @@ function formatBytes(bytes: number) {
 }
 
 export function FeedbackForm() {
-  const [mode, setMode] = useState<FormMode>("feedback");
+  const searchParams = useSearchParams();
+  const initialMode: FormMode =
+    searchParams.get("mode") === "material" ? "material" : "feedback";
+  const [mode, setMode] = useState<FormMode>(initialMode);
   const [category, setCategory] = useState<FeedbackCategory>("SUGGESTION");
   const [content, setContent] = useState("");
   const [materialTitle, setMaterialTitle] = useState("");
@@ -60,6 +64,12 @@ export function FeedbackForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<DoneKind>(null);
+
+  useEffect(() => {
+    if (searchParams.get("mode") === "material") {
+      setMode("material");
+    }
+  }, [searchParams]);
 
   const resetFeedback = () => {
     setContent("");

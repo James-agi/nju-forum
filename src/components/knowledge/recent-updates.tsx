@@ -15,13 +15,11 @@ const NEW_CARD_WINDOW_MS = 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NEW_ENTRY_DAYS = 14;
 const CONTENT_UPDATE_ENTRY_DAYS = 21;
-const VERIFIED_ENTRY_DAYS = 7;
 
 export const RECENT_UPDATE_KIND_FILTERS = [
   "all",
   "new",
   "content",
-  "verified",
 ] as const;
 
 export type RecentUpdateKindFilter = (typeof RECENT_UPDATE_KIND_FILTERS)[number];
@@ -30,7 +28,6 @@ export const RECENT_UPDATE_KIND_LABELS: Record<RecentUpdateKindFilter, string> =
   all: "全部更新",
   new: "新增",
   content: "内容更新",
-  verified: "已核实",
 };
 
 type UpdateEntry = {
@@ -45,7 +42,7 @@ type UpdateEntry = {
     updatedAt: Date;
     revisions: Array<{ summary: string; body: string; createdAt: Date }>;
   };
-  kind: "新增" | "内容更新" | "已核实";
+  kind: "新增" | "内容更新";
   kindFilter: Exclude<RecentUpdateKindFilter, "all">;
   displayAt: Date;
 };
@@ -219,19 +216,6 @@ function toUpdateEntries(card: UpdateEntry["card"], now: Date): UpdateEntry[] {
     });
   }
 
-  if (
-    card.verificationStatus === "VERIFIED" &&
-    card.verifiedAt &&
-    withinDays(card.verifiedAt, now, VERIFIED_ENTRY_DAYS)
-  ) {
-    entries.push({
-      card,
-      kind: "已核实",
-      kindFilter: "verified",
-      displayAt: card.verifiedAt,
-    });
-  }
-
   return entries;
 }
 
@@ -295,13 +279,6 @@ export async function RecentKnowledgeUpdates({
       },
     });
   }
-  if (kind === "all" || kind === "verified") {
-    recencyFilters.push({
-      verificationStatus: "VERIFIED",
-      verifiedAt: { gte: daysAgo(now, VERIFIED_ENTRY_DAYS) },
-    });
-  }
-
   const where: Prisma.KnowledgeCardWhereInput = {
     archivedAt: null,
     ...(domainTag !== "all" ? { domainTag } : {}),
@@ -356,8 +333,7 @@ export async function RecentKnowledgeUpdates({
           <h2 className="text-lg font-semibold">最近更新</h2>
           <p className="mt-1 text-sm leading-6 text-muted-foreground">
             新增卡片展示 {NEW_ENTRY_DAYS} 天，正文或摘要更新展示{" "}
-            {CONTENT_UPDATE_ENTRY_DAYS} 天，最近核实的卡片展示{" "}
-            {VERIFIED_ENTRY_DAYS} 天；归档后立即退出。
+            {CONTENT_UPDATE_ENTRY_DAYS} 天；归档后立即退出。
           </p>
         </div>
         <Badge variant="outline" className="w-fit">

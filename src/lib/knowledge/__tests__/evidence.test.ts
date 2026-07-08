@@ -138,6 +138,42 @@ describe("evaluateEvidence", () => {
     expect(result.reason).toBe("PREFILTER_PASSED");
   });
 
+  it("accepts a low-scoring course-selection anchor for broad planning questions", () => {
+    const results = [
+      makeResult({
+        score: 8,
+        matchedTerms: ["\u9009\u8bfe"],
+        queryTerms: ["\u9009\u8bfe", "\u5148\u770b", "\u522b\u628a\u540e\u9762\u8def\u5835\u6b7b"],
+        cardOverrides: {
+          summary: "\u65b0\u751f\u7b2c\u4e00\u6b21\u9009\u8bfe\u600e\u4e48\u8fdb\u7cfb\u7edf\uff1f\u521d\u9009\u3001\u9000\u8865\u9009\u5206\u522b\u8981\u505a\u4ec0\u4e48\uff1f",
+          body: "\u9009\u8bfe\u524d\u5efa\u8bae\u5148\u770b\u57f9\u517b\u65b9\u6848\u3001\u901a\u8bc6\u8bfe\u8981\u6c42\u548c\u9000\u8865\u9009\u65f6\u95f4\u3002",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.reason).toBe("PREFILTER_PASSED");
+  });
+
+  it("accepts campus shopping evidence for daily-supplies questions", () => {
+    const results = [
+      makeResult({
+        score: 12,
+        matchedTerms: ["\u65e5\u7528\u54c1", "\u6559\u8d85", "\u4fbf\u5229\u5e97", "\u5546\u94fa"],
+        queryTerms: ["\u65e5\u7528\u54c1", "\u6559\u8d85", "\u6559\u80b2\u8d85\u5e02", "\u4fbf\u5229\u5e97", "\u5546\u94fa"],
+        cardOverrides: {
+          summary: "\u4ed9\u6797\u6821\u533a\u4e00\u7ec4\u56e2\u9644\u8fd1\u6709\u54ea\u4e9b\u5546\u94fa\uff1f",
+          body: "\u4e8c\u680b\u9644\u8fd1\u6709\u6559\u80b2\u8d85\u5e02\u548c\u4fbf\u5229\u5e97\uff0c\u53ef\u4ee5\u4e70\u65e5\u7528\u54c1\u3001\u65e9\u9910\u548c\u6587\u5177\u3002",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.reason).toBe("PREFILTER_PASSED");
+  });
+
   it("does not answer unknown campus service questions from generic NJU terms only", () => {
     const results = [
       makeResult({
@@ -217,6 +253,97 @@ describe("evaluateEvidence", () => {
     const result = evaluateEvidence(results);
     expect(result.sufficient).toBe(true);
     expect(result.cards[0].card.id).toBe("correct-location");
+  });
+
+  it("rejects cards whose title names a different campus location", () => {
+    const results = [
+      makeResult({
+        score: 21,
+        matchedTerms: ["\u7406\u53d1\u5e97", "\u9f13\u697c", "\u7406\u53d1"],
+        queryTerms: ["\u7406\u53d1\u5e97", "\u9f13\u697c", "\u7406\u53d1"],
+        cardOverrides: {
+          id: "wrong-campus",
+          summary: "\u82cf\u5dde\u6821\u533a\u6709\u4fbf\u5229\u5e97\u3001\u6253\u5370\u5e97\u548c\u7406\u53d1\u5e97\u5417\uff1f",
+          body: "\u6821\u5185\u6709\u7406\u53d1\u5e97\uff0c\u4ef7\u683c\u6ca1\u6709\u9f13\u697c\u6559\u8d85\u90a3\u4e48\u53cb\u597d\u3002",
+        },
+      }),
+      makeResult({
+        score: 13,
+        matchedTerms: ["\u7406\u53d1\u5e97", "\u9f13\u697c", "\u7406\u53d1"],
+        queryTerms: ["\u7406\u53d1\u5e97", "\u9f13\u697c", "\u7406\u53d1"],
+        cardOverrides: {
+          id: "generic-haircut",
+          summary: "\u6821\u5185\u5916\u54ea\u91cc\u53ef\u4ee5\u7406\u53d1\uff1f",
+          body: "\u4ed9\u6797\u6709\u963f\u739b\u5c3c\u3002\u9f13\u697c\u6559\u8d85\u8fb9\u4e0a\u6709\u4e00\u5bb6\u300c\u98de\u4e1d\u6d41\u5f69\u300d\u3002",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.cards[0].card.id).toBe("generic-haircut");
+  });
+
+  it("prefers location-neutral service evidence when the question does not name a campus", () => {
+    const results = [
+      makeResult({
+        score: 23,
+        matchedTerms: ["自行车", "修理铺", "修理"],
+        queryTerms: ["自行车", "修车", "修理", "修理铺"],
+        cardOverrides: {
+          id: "pukou-repair",
+          summary: "浦口校区校内购物和修理服务（教超、打印店、修理铺）",
+          body: "双亭园还有校园修理铺，提供修自行车服务。",
+        },
+      }),
+      makeResult({
+        score: 14,
+        matchedTerms: ["自行车", "修车"],
+        queryTerms: ["自行车", "修车", "修理", "修理铺"],
+        cardOverrides: {
+          id: "generic-bike",
+          summary: "自行车/电动车哪里修、哪里打气？",
+          body: "修车点包括一栋和三栋之间的一楼里边、大气楼门口。",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.cards[0].card.id).toBe("generic-bike");
+    expect(result.cards.map((item) => item.card.id)).toContain("pukou-repair");
+  });
+
+  it("does not let expansion-only identity terms override the original topic anchor", () => {
+    const results = [
+      makeResult({
+        score: 16,
+        matchedTerms: ["校外", "校外人员"],
+        queryTerms: ["校外", "图书馆", "校外人员", "图书馆访问", "入馆规定"],
+        originalQueryTerms: ["校外", "校外人员", "图书馆"],
+        cardOverrides: {
+          id: "wrong-travel-reimburse",
+          summary: "因公出国报销需要哪些材料？团组办理、校外人员、应届毕业生分别需要什么？",
+          body: "校外人员办理因公出国报销时，需要准备任务批件、经费说明和票据。",
+        },
+      }),
+      makeResult({
+        score: 11,
+        matchedTerms: ["图书馆"],
+        queryTerms: ["校外", "图书馆", "校外人员", "图书馆访问", "入馆规定"],
+        originalQueryTerms: ["校外", "校外人员", "图书馆"],
+        cardOverrides: {
+          id: "library-borrow",
+          summary: "南京大学图书馆借书的基本流程是什么？",
+          body: "图书馆借书需要通过统一检索系统查找图书，并到服务台或自助机办理。",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.cards[0].card.id).toBe("library-borrow");
+    expect(result.cards.map((item) => item.card.id)).not.toContain("wrong-travel-reimburse");
   });
 
   it("accepts a reinforced single Chinese domain anchor", () => {
