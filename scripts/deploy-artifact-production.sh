@@ -244,6 +244,12 @@ fi
 pm2_start_app "${NEW_APP_DIR}"
 
 echo "==> Health check"
+for _ in $(seq 1 30); do
+  if curl -fsS "http://127.0.0.1:${PORT}/login" >/dev/null; then
+    break
+  fi
+  sleep 1
+done
 if ! curl -fsS "http://127.0.0.1:${PORT}/login" >/dev/null; then
   rollback_pm2
   cleanup_failed_release
