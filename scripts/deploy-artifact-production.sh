@@ -213,7 +213,8 @@ if [ "${RUN_DB_MIGRATIONS}" = "1" ]; then
   echo "==> Applying database migrations"
   (
     cd "${NEW_APP_DIR}"
-    npx --yes prisma migrate deploy
+    PRISMA_VERSION="$(node -p 'const pkg=require("./package.json"); const v=(pkg.dependencies&&pkg.dependencies.prisma)||(pkg.devDependencies&&pkg.devDependencies.prisma)||""; process.stdout.write(v.replace(/^[~^]/, ""));')"
+    npx --yes "prisma@${PRISMA_VERSION}" migrate deploy
   )
 else
   echo "==> Skipping database migrations"
