@@ -12,6 +12,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/njuknow?schema=public
+      NEXTAUTH_SECRET: ci-build-secret
+      NEXTAUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_SITE_URL: https://njuknow.xyz
 
     steps:
       - name: Checkout
