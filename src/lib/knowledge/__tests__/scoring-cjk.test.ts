@@ -12,7 +12,7 @@ function makeCard(overrides: Partial<RetrievalCard> = {}): RetrievalCard {
     sourceDescription: "测试来源",
     sourceType: "DOCUMENT",
     verificationStatus: "VERIFIED",
-    domainTag: "选课规则",
+    domainTag: "课程学业",
     createdAt: new Date(),
     updatedAt: new Date(),
     archivedAt: null,

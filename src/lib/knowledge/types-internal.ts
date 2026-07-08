@@ -10,4 +10,5 @@ export interface RetrievalResult {
   card: RetrievalCard;
   score: number;
   matchedTerms: string[];
+  queryTerms?: string[];
 }

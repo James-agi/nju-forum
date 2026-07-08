@@ -161,6 +161,45 @@ describe("classifyP0Scope", () => {
     expect(result.code).toBe("OPEN_CHAT");
   });
 
+  it("rejects broad non-campus entertainment, programming, and travel questions", () => {
+    expect(classifyP0Scope("推荐几部电影").code).toBe("GENERAL_ENTERTAINMENT");
+    expect(classifyP0Scope("React hooks怎么用").code).toBe("GENERAL_PROGRAMMING");
+    expect(classifyP0Scope("南京周末去哪玩").code).toBe("GENERAL_TRAVEL_SHOPPING");
+  });
+
+  it("allows stable campus-adjacent card topics that are already in the knowledge base", () => {
+    expect(classifyP0Scope("教材要不要买新书？二手书去哪找？").inScope).toBe(true);
+    expect(classifyP0Scope("如何向南哪助手投稿").inScope).toBe(true);
+  });
+
+  it("still rejects textbook exercise solving requests", () => {
+    const result = classifyP0Scope("帮我解析教材课后题");
+    expect(result.inScope).toBe(false);
+    expect(result.code).toBe("TEXTBOOK");
+  });
+
+  it("rejects realtime weather questions", () => {
+    const result = classifyP0Scope("\u5357\u4eac\u660e\u5929\u5929\u6c14\u600e\u4e48\u6837");
+    expect(result.inScope).toBe(false);
+    expect(result.code).toBe("REALTIME_WEATHER");
+  });
+
+  it("rejects personal academic data lookup requests", () => {
+    const result = classifyP0Scope("\u5e2e\u6211\u67e5\u6211\u7684\u6210\u7ee9\u6392\u540d");
+    expect(result.inScope).toBe(false);
+    expect(result.code).toBe("PERSONAL_ACADEMIC_DATA");
+  });
+
+  it("rejects academic misconduct and direct paper completion requests", () => {
+    expect(classifyP0Scope("考试怎么作弊不被发现").code).toBe("ACADEMIC_MISCONDUCT");
+    expect(classifyP0Scope("帮我直接完成这篇英语论文").code).toBe("ACADEMIC_MISCONDUCT");
+  });
+
+  it("rejects concrete medical advice and personal account balance lookup", () => {
+    expect(classifyP0Scope("我发烧了该吃什么药").code).toBe("MEDICAL_ADVICE");
+    expect(classifyP0Scope("我的饭卡余额还有多少").code).toBe("PERSONAL_ACADEMIC_DATA");
+  });
+
   it("allows campus question with blacklisted word + NJU signal", () => {
     const result = classifyP0Scope("食堂价格贵吗");
     expect(result.inScope).toBe(true);
@@ -185,5 +224,12 @@ describe("classifyNoResult", () => {
 
   it("returns OUT_OF_SCOPE for non-NJU question", () => {
     expect(classifyNoResult("今天天气怎么样")).toBe("OUT_OF_SCOPE");
+  });
+});
+
+describe("classifyNoResult hard blocks", () => {
+  it("returns OUT_OF_SCOPE for hard blocked questions", () => {
+    expect(classifyNoResult("\u5357\u4eac\u660e\u5929\u5929\u6c14\u600e\u4e48\u6837")).toBe("OUT_OF_SCOPE");
+    expect(classifyNoResult("\u5e2e\u6211\u67e5\u6211\u7684\u6210\u7ee9\u6392\u540d")).toBe("OUT_OF_SCOPE");
   });
 });

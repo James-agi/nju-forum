@@ -48,6 +48,177 @@ describe("evaluateEvidence", () => {
     expect(result.reason).toBe("UNRELATED");
   });
 
+  it("accepts section evidence when context is in summary and answer is in a body section", () => {
+    const results = [
+      makeResult({
+        score: 9,
+        matchedTerms: ["\u9f13\u697c", "\u6d17\u8863\u5e97"],
+        queryTerms: ["\u9f13\u697c", "\u5357\u5927\u9f13\u697c", "\u6d17\u8863\u5e97", "\u54ea\u91cc"],
+        cardOverrides: {
+          summary:
+            "\u9f13\u697c\u6821\u533a\u751f\u6d3b\u670d\u52a1\u600e\u4e48\u7528\uff1f\uff08\u5feb\u9012/\u6d17\u8863/\u5916\u5356/\u4fbf\u5229\u5e97/\u6d17\u6d74\uff09",
+          body:
+            "\u3010\u5feb\u9012\u3011\u6821\u5185\u6709\u83dc\u9e1f\u9a7f\u7ad9\u3002\n\n\u3010\u6d17\u8863\u5e97\u3011\u6821\u5185\u548c\u548c\u5e73\u4ed3\u5df7\u90fd\u6709\u5e72\u6d17\u6d17\u978b\u5e97\u3002",
+        },
+      }),
+    ];
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.reason).toBe("PREFILTER_PASSED");
+  });
+
+  it("does not treat a cross-word substring as section evidence", () => {
+    const results = [
+      makeResult({
+        score: 7,
+        matchedTerms: ["\u62a5\u5230", "\u6750\u6599"],
+        queryTerms: ["\u62a5\u5230", "\u65b0\u751f", "\u6750\u6599"],
+        cardOverrides: {
+          summary: "\u521b\u65b0\u9879\u76ee\u4ece\u7533\u62a5\u5230\u7ed3\u9898\u7684\u5b8c\u6574\u6d41\u7a0b\u662f\u600e\u6837\u7684\uff1f",
+          body:
+            "\u3010\u6750\u6599\u3011\u9879\u76ee\u7533\u62a5\u5230\u7ed3\u9898\u9700\u8981\u63d0\u4ea4\u4e2d\u671f\u8868\u548c\u7ed3\u9898\u8868\u3002",
+        },
+      }),
+    ];
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("accepts related broad evidence even when dynamic opening-time details are not explicit", () => {
+    const results = [
+      makeResult({
+        score: 13,
+        matchedTerms: ["\u4ed9\u6797", "\u6821\u533a", "\u53d1\u5e97"],
+        queryTerms: ["\u4ed9\u6797", "\u6821\u533a", "\u53d1\u5e97", "\u665a\u4e0a", "\u5341\u70b9", "\u5f00\u95e8"],
+        cardOverrides: {
+          summary: "\u4ed9\u6797\u6821\u533a\u4e00\u7ec4\u56e2\uff08\u4e00\u680b\u5230\u4e09\u680b\uff09\u9644\u8fd1\u6709\u54ea\u4e9b\u5546\u94fa\uff1f",
+          body: "\u3010\u4e00\u7ec4\u56e2\u3011\u6709\u4fbf\u5229\u5e97\u3001\u6253\u5370\u5e97\u548c\u7406\u53d1\u5e97\u3002",
+        },
+      }),
+    ];
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.reason).toBe("PREFILTER_PASSED");
+  });
+
+  it("accepts verified broad evidence for dynamic detail questions with a domain anchor", () => {
+    const results = [
+      makeResult({
+        score: 6,
+        matchedTerms: ["\u98df\u5802"],
+        queryTerms: ["\u98df\u5802", "\u4eca\u5929", "\u591a\u5c11\u94b1"],
+        cardOverrides: {
+          summary: "\u82cf\u5dde\u6821\u533a\u98df\u5802\u6709\u54ea\u4e9b\uff1f\u4ef7\u683c\u548c\u5473\u9053\u600e\u4e48\u6837\uff1f",
+          body: "\u5361\u7247\u6574\u7406\u4e86\u98df\u5802\u4f4d\u7f6e\u548c\u4e00\u822c\u5c31\u9910\u4fe1\u606f\u3002",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.reason).toBe("PREFILTER_PASSED");
+  });
+
+  it("accepts a low-scoring direct title match for a concrete campus service", () => {
+    const results = [
+      makeResult({
+        score: 6,
+        matchedTerms: ["\u7f34\u8d39"],
+        queryTerms: ["\u5b66\u8d39", "\u7f34\u8d39", "\u600e\u4e48\u4ea4"],
+        cardOverrides: {
+          summary: "\u672c\u79d1\u65b0\u751f\u600e\u4e48\u7f34\u8d39\uff1f",
+          body: "\u672c\u79d1\u65b0\u751f\u7f34\u8d39\u4ee5\u5b66\u6821\u901a\u77e5\u548c\u7f34\u8d39\u7cfb\u7edf\u4e3a\u51c6\u3002",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.reason).toBe("PREFILTER_PASSED");
+  });
+
+  it("does not answer unknown campus service questions from generic NJU terms only", () => {
+    const results = [
+      makeResult({
+        score: 11,
+        matchedTerms: ["\u5357\u5927\u6709", "\u6ca1\u6709"],
+        queryTerms: ["\u5357\u5927\u6709", "\u5ba0\u7269\u6258", "\u6ca1\u6709", "\u7ba1\u70b9"],
+        cardOverrides: {
+          summary: "\u65b0\u751f\u6536\u5230\u7684\u300c\u6821\u56ed\u4fe1\u606f\u5361\u300d\u300c\u5bbd\u5e26\u4fe1\u606f\u5361\u300d\u662f\u4ec0\u4e48\uff1f\u548c\u5357\u5927\u6709\u6ca1\u6709\u5173\u7cfb\uff1f",
+          body: "\u8fd9\u5f20\u5361\u53ea\u8bf4\u660e\u6821\u56ed\u4fe1\u606f\u5361\u548c\u5bbd\u5e26\u4fe1\u606f\u5361\u7684\u8bc6\u522b\u65b9\u5f0f\u3002",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("does not accept broad dynamic evidence when only a location term matches", () => {
+    const results = [
+      makeResult({
+        score: 7,
+        matchedTerms: ["\u4ed9\u6797"],
+        queryTerms: ["\u5e8a\u4f4d", "\u4ed9\u6797", "\u73b0\u5728", "\u7a7a\u5e8a"],
+        cardOverrides: {
+          summary: "\u4ed9\u6797\u6821\u533a\u4e00\u7ec4\u56e2\u9644\u8fd1\u6709\u54ea\u4e9b\u5546\u94fa\uff1f",
+          body: "\u4ed9\u6797\u6821\u533a\u6709\u4fbf\u5229\u5e97\u548c\u6253\u5370\u5e97\u3002",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("rejects route evidence that misses the requested campus location", () => {
+    const results = [
+      makeResult({
+        score: 29,
+        matchedTerms: ["\u901a\u52e4", "\u8def\u7ebf", "\u5730\u94c1", "\u516c\u4ea4", "\u6821\u533a"],
+        queryTerms: ["\u600e\u4e48\u53bb", "\u82cf\u5dde", "\u901a\u52e4", "\u8def\u7ebf", "\u5730\u94c1", "\u516c\u4ea4", "\u6821\u533a"],
+        cardOverrides: {
+          summary: "\u9f13\u697c\u5317\u56ed\u5230\u4ed9\u6797\u6821\u533a\u600e\u4e48\u901a\u52e4\uff1f",
+          body: "\u3010\u5730\u94c1\u3011\u4e58\u5750 4 \u53f7\u7ebf\u6362\u4e58 2 \u53f7\u7ebf\u3002\u3010\u516c\u4ea4\u3011\u53ef\u4ee5\u9009\u62e9\u516c\u4ea4\u8def\u7ebf\u3002",
+        },
+      }),
+    ];
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("uses a lower-ranked strong card when the top candidate misses required constraints", () => {
+    const results = [
+      makeResult({
+        score: 29,
+        matchedTerms: ["\u901a\u52e4", "\u8def\u7ebf", "\u5730\u94c1", "\u516c\u4ea4", "\u6821\u533a"],
+        queryTerms: ["\u600e\u4e48\u53bb", "\u82cf\u5dde", "\u901a\u52e4", "\u8def\u7ebf", "\u5730\u94c1", "\u516c\u4ea4", "\u6821\u533a"],
+        cardOverrides: {
+          id: "wrong-location",
+          summary: "\u9f13\u697c\u5317\u56ed\u5230\u4ed9\u6797\u6821\u533a\u600e\u4e48\u901a\u52e4\uff1f",
+          body: "\u5730\u94c1\u548c\u516c\u4ea4\u90fd\u53ef\u4ee5\u8d70\u3002",
+        },
+      }),
+      makeResult({
+        score: 25,
+        matchedTerms: ["\u82cf\u5dde", "\u8def\u7ebf", "\u5730\u94c1", "\u516c\u4ea4", "\u6821\u533a"],
+        queryTerms: ["\u600e\u4e48\u53bb", "\u82cf\u5dde", "\u901a\u52e4", "\u8def\u7ebf", "\u5730\u94c1", "\u516c\u4ea4", "\u6821\u533a"],
+        cardOverrides: {
+          id: "correct-location",
+          summary: "\u82cf\u5dde\u6821\u533a\u6821\u5916\u51fa\u884c\u600e\u4e48\u8d70\uff1f",
+          body: "\u3010\u82cf\u5dde\u5317\u7ad9\u3011\u53ef\u4ee5\u5750\u5730\u94c1\u6362\u4e58\u5230\u82cf\u5dde\u6821\u533a\u3002\u516c\u4ea4\u548c\u8def\u7ebf\u4ee5\u5361\u7247\u4e3a\u51c6\u3002",
+        },
+      }),
+    ];
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(true);
+    expect(result.cards[0].card.id).toBe("correct-location");
+  });
+
   it("accepts a reinforced single Chinese domain anchor", () => {
     const anchor = "\u8f6c\u4e13\u4e1a";
     const results = [

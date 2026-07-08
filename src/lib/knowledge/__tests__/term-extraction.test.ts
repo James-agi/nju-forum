@@ -31,6 +31,23 @@ describe("extractRetrievalTerms", () => {
     expect(terms).toContain("修读");
   });
 
+  it("expands lost-card wording to replacement actions", async () => {
+    const terms = await extractRetrievalTerms("饭卡丢了怎么办");
+    expect(terms).toContain("校园卡");
+    expect(terms).toContain("一卡通");
+    expect(terms).toContain("挂失");
+    expect(terms).toContain("补办");
+  });
+
+  it("expands colloquial recommendation questions", async () => {
+    const terms = await extractRetrievalTerms("保研怎么搞");
+    expect(terms).toContain("保研");
+    expect(terms).toContain("推免");
+    expect(terms).toContain("夏令营");
+    expect(terms).toContain("预推免");
+    expect(terms).toContain("保研课");
+  });
+
   it("limits output to 15 terms", async () => {
     // A very long question with many potential terms
     const terms = await extractRetrievalTerms(

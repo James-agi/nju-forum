@@ -52,7 +52,7 @@ export async function retrieveKnowledgeCards(
   });
 
   return cards
-    .map((c) => ({ card: c, ...scoreCard(c, terms) }))
+    .map((c) => ({ card: c, queryTerms: terms, ...scoreCard(c, terms) }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || b.card.updatedAt.getTime() - a.card.updatedAt.getTime())
     .slice(0, limit);
@@ -105,7 +105,9 @@ export async function retrieveHybrid(
         domainTag: true, createdAt: true, updatedAt: true, archivedAt: true,
       },
     });
-    semanticOnlyResults = cards.map((c) => ({ card: c, ...scoreCard(c, allTerms) }));
+    semanticOnlyResults = cards
+      .map((c) => ({ card: c, queryTerms: allTerms, ...scoreCard(c, allTerms) }))
+      .filter((r) => r.score > 0);
   }
 
   const allResults = [...keywordResults, ...semanticOnlyResults];
