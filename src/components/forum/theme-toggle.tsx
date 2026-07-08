@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
+import {
+  getAppliedTheme,
+  listenThemeChange,
+  toggleStoredTheme,
+} from "@/lib/theme";
+import type { Theme } from "@/lib/theme";
 
 export function ThemeToggle() {
   const [theme, setTheme] = useState<"dark" | "light">("light");
@@ -9,20 +15,12 @@ export function ThemeToggle() {
 
   useEffect(() => {
     setMounted(true);
-    setTheme(
-      document.documentElement.classList.contains("dark") ? "dark" : "light"
-    );
+    setTheme(getAppliedTheme());
+    return listenThemeChange((nextTheme: Theme) => setTheme(nextTheme));
   }, []);
 
   const toggle = () => {
-    const next = theme === "dark" ? "light" : "dark";
-    setTheme(next);
-    document.documentElement.classList.add("theme-transition");
-    document.documentElement.classList.toggle("dark", next === "dark");
-    setTimeout(() => document.documentElement.classList.remove("theme-transition"), 350);
-    try {
-      localStorage.setItem("theme", next);
-    } catch {}
+    setTheme(toggleStoredTheme());
   };
 
   return (

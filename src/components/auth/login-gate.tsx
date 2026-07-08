@@ -14,7 +14,7 @@ export function LoginGate() {
         </div>
         <div>
           <p className="text-sm font-medium text-foreground">登录后查看全部内容</p>
-          <p className="mt-1 text-xs text-muted-foreground">南大邮箱验证，保障社区质量</p>
+          <p className="mt-1 text-xs text-muted-foreground">注册邮箱验证，保障社区质量</p>
         </div>
         <Button asChild size="sm" className="rounded-none">
           <Link href="/login">登录解锁 →</Link>

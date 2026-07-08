@@ -4,6 +4,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Search, Hash, Sun, Moon, PenSquare, User, MessageSquare, Inbox, Users } from "lucide-react";
+import {
+  getAppliedTheme,
+  listenThemeChange,
+  toggleStoredTheme,
+} from "@/lib/theme";
 
 interface CommandItem {
   id: string;
@@ -24,19 +29,21 @@ export function CommandPalette() {
   const isAdmin = session?.user?.role === "ADMIN";
 
   const [isDark, setIsDark] = useState(false);
+
   useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
+    setIsDark(getAppliedTheme() === "dark");
+    return listenThemeChange((theme) => setIsDark(theme === "dark"));
+  }, []);
+
+  useEffect(() => {
+    if (open) setIsDark(getAppliedTheme() === "dark");
   }, [open]);
 
   const toggleTheme = useCallback(() => {
-    const next = isDark ? "light" : "dark";
-    document.documentElement.classList.add("theme-transition");
-    document.documentElement.classList.toggle("dark", next === "dark");
-    setTimeout(() => document.documentElement.classList.remove("theme-transition"), 350);
-    localStorage.setItem("theme", next);
-    setIsDark(!isDark);
+    const nextTheme = toggleStoredTheme();
+    setIsDark(nextTheme === "dark");
     setOpen(false);
-  }, [isDark]);
+  }, []);
 
   const items: CommandItem[] = [
     { id: "search", label: "全站搜索", group: "导航", icon: <Search className="h-4 w-4" />, shortcut: "/search", action: () => { router.push("/search"); setOpen(false); } },

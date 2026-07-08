@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,7 +92,6 @@ function ParticleBackground() {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -116,8 +114,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError("邮箱或密码错误，或账号已被封禁");
       } else {
-        router.push("/forum");
-        router.refresh();
+        window.location.href = "/forum";
       }
     } catch {
       setError("登录失败，请稍后再试");
@@ -141,7 +138,7 @@ export default function LoginPage() {
             <BookOpen className="h-6 w-6 text-foreground" />
           </div>
           <CardTitle className="text-2xl">登录知南</CardTitle>
-          <CardDescription>推荐使用南大邮箱登录</CardDescription>
+          <CardDescription>使用注册邮箱登录</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -160,7 +157,7 @@ export default function LoginPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="your@nju.edu.cn / your@smail.nju.edu.cn"
+                placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required

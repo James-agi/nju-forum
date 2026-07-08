@@ -179,59 +179,18 @@
     box-shadow: 0 0 22px hsl(var(--foreground) / 0.08);
   }
 
-  .card-bubble-surface::before {
-    content: "";
-    position: absolute;
-    inset-inline: 1rem;
-    top: 5.5rem;
-    height: 1px;
-    background: hsl(var(--border));
-    opacity: 0.7;
-    pointer-events: none;
-  }
-
-  .card-bubble-surface::after {
-    content: "";
-    position: absolute;
-    inset-inline: 0;
-    top: 0;
-    height: 7rem;
-    background:
-      linear-gradient(
-        to bottom,
-        hsl(var(--status-info) / 0.08),
-        transparent
-      );
-    pointer-events: none;
-  }
-
-  @keyframes card-bubble-rise {
-    0% {
-      opacity: 0;
-      transform: translateY(24px) scale(0.98);
-    }
-    55% {
-      opacity: 1;
-      transform: translateY(-4px) scale(1);
-    }
-    100% {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
-
-  @keyframes card-bubble-drift {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-5px); }
+  /* 「不思考」卡片入场：只做透明度淡入，不做位移。
+     漂浮/定位全部由 JS 物理场（floating-cards-field.tsx）用 transform 驱动，
+     这里若再加 transform 动画会与 rAF 每帧写入的 transform 打架。
+     淡入还顺带遮住「effect 写首帧 transform 前卡片短暂堆在原点」的闪现。 */
+  @keyframes card-bubble-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .knowledge-card-bubble {
-    animation:
-      card-bubble-rise 0.72s cubic-bezier(0.16, 1, 0.3, 1) both,
-      card-bubble-drift 5.8s ease-in-out infinite;
-    animation-delay:
-      calc(var(--bubble-index, 0) * 90ms),
-      calc(720ms + var(--bubble-index, 0) * 120ms);
+    animation: card-bubble-in 0.5s ease-out both;
+    animation-delay: calc(var(--bubble-index, 0) * 80ms);
   }
 }
 

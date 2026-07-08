@@ -128,7 +128,7 @@ export default function RegisterPage() {
             <BookOpen className="h-6 w-6 text-foreground" />
           </div>
           <CardTitle className="text-2xl">注册知南</CardTitle>
-          <CardDescription>推荐使用 @nju.edu.cn 或 @smail.nju.edu.cn 邮箱</CardDescription>
+          <CardDescription>使用任意有效邮箱注册</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -149,7 +149,7 @@ export default function RegisterPage() {
                   id="email"
                   name="email"
                   type="email"
-                  placeholder="your@nju.edu.cn / your@smail.nju.edu.cn"
+                  placeholder="you@example.com"
                   value={form.email}
                   onChange={handleChange}
                   required
