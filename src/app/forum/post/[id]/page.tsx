@@ -279,7 +279,11 @@ export default async function PostPage({ params }: PostPageProps) {
       <section className="animate-slide-up">
         <h2 className="section-label">回复 ({post._count.replies})</h2>
         <div className="mt-4">
-          <ReplyList replies={replies} postId={post.id} />
+          <ReplyList
+            replies={replies}
+            postId={post.id}
+            canReply={Boolean(session?.user)}
+          />
         </div>
       </section>
 

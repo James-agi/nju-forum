@@ -8,6 +8,7 @@ PM2_APP="${PM2_APP:-njuknow}"
 PORT="${PORT:-3000}"
 APP_HOST="${APP_HOST:-0.0.0.0}"
 HEALTH_PORT="${HEALTH_PORT:-3100}"
+RUN_DB_MIGRATIONS="${RUN_DB_MIGRATIONS:-1}"
 KEEP_FAILED_RELEASE="${KEEP_FAILED_RELEASE:-1}"
 PM2_USE_SUDO="${PM2_USE_SUDO:-auto}"
 RELEASE_NAME="${RELEASE_NAME:-$(date +%Y%m%d%H%M%S)-artifact}"
@@ -175,9 +176,26 @@ cp -p "${ENV_SOURCE}" "${NEW_APP_DIR}/.env"
 safe_link_shared_path "knowledge-images"
 safe_link_shared_path "pdfs"
 safe_link_shared_path "forum-images"
+safe_link_shared_path "avatars"
 
 if [ -e "${SHARED_DIR}/temp-card-vectors.json" ]; then
   ln -s "${SHARED_DIR}/temp-card-vectors.json" "${NEW_APP_DIR}/temp-card-vectors.json"
+fi
+
+if [ "${RUN_DB_MIGRATIONS}" = "1" ]; then
+  if [ ! -d "${NEW_APP_DIR}/prisma/migrations" ] || [ ! -f "${NEW_APP_DIR}/prisma/schema.prisma" ]; then
+    echo "ERROR: artifact does not contain Prisma migrations/schema."
+    cleanup_failed_release
+    exit 1
+  fi
+
+  echo "==> Applying database migrations"
+  (
+    cd "${NEW_APP_DIR}"
+    npx --yes prisma migrate deploy
+  )
+else
+  echo "==> Skipping database migrations"
 fi
 
 echo "==> Smoke testing release on port ${HEALTH_PORT}"
