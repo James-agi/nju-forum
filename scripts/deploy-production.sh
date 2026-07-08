@@ -124,6 +124,26 @@ safe_link_shared_path() {
   ln -s "${shared_path}" "${target_path}"
 }
 
+safe_link_shared_storage_path() {
+  local name="$1"
+  local shared_path="${SHARED_DIR}/storage/${name}"
+  local target_path="${NEW_APP_DIR}/storage/${name}"
+
+  mkdir -p "${shared_path}"
+  mkdir -p "${NEW_APP_DIR}/storage"
+  if [ -e "${target_path}" ] || [ -L "${target_path}" ]; then
+    case "${target_path}" in
+      "${NEW_APP_DIR}/storage/"*) rm -rf "${target_path}" ;;
+      *)
+        echo "ERROR: refusing to remove unexpected path: ${target_path}"
+        exit 1
+        ;;
+    esac
+  fi
+
+  ln -s "${shared_path}" "${target_path}"
+}
+
 echo "==> Creating isolated release: ${NEW_APP_DIR}"
 git worktree add --detach "${NEW_APP_DIR}" "${TARGET_SHA}"
 
@@ -141,6 +161,7 @@ mkdir -p "${NEW_APP_DIR}/public"
 safe_link_shared_path "knowledge-images"
 safe_link_shared_path "pdfs"
 safe_link_shared_path "forum-images"
+safe_link_shared_storage_path "feedback-materials"
 
 if [ -e "${SHARED_DIR}/temp-card-vectors.json" ]; then
   ln -s "${SHARED_DIR}/temp-card-vectors.json" "${NEW_APP_DIR}/temp-card-vectors.json"

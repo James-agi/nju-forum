@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Mail } from "lucide-react";
+import { ArrowLeft, Download, ExternalLink, Mail } from "lucide-react";
 import { FeedbackArchiveButton } from "@/components/feedback/feedback-archive-button";
 import {
   FEEDBACK_CATEGORY_LABELS,
@@ -10,6 +10,53 @@ import {
 } from "@/lib/feedback/validation";
 
 export const dynamic = "force-dynamic";
+
+function renderFeedbackContent(content: string) {
+  return content.split("\n").map((line, index) => {
+    const trimmed = line.trim();
+    const urlMatch = trimmed.match(/^URL：(https?:\/\/\S+)$/);
+    const downloadMatch = trimmed.match(
+      /^下载：(\/api\/admin\/feedback\/materials\/[A-Za-z0-9._~/%-]+)$/
+    );
+
+    if (!trimmed) {
+      return <div key={index} className="h-3" />;
+    }
+
+    if (urlMatch) {
+      return (
+        <div key={index} className="flex flex-wrap items-center gap-1.5">
+          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+          <span>URL：</span>
+          <a
+            href={urlMatch[1]}
+            target="_blank"
+            rel="noreferrer"
+            className="break-all text-primary underline-offset-4 hover:underline"
+          >
+            {urlMatch[1]}
+          </a>
+        </div>
+      );
+    }
+
+    if (downloadMatch) {
+      return (
+        <div key={index} className="flex flex-wrap items-center gap-1.5">
+          <Download className="h-3.5 w-3.5 text-muted-foreground" />
+          <a
+            href={downloadMatch[1]}
+            className="text-primary underline-offset-4 hover:underline"
+          >
+            下载提交文件
+          </a>
+        </div>
+      );
+    }
+
+    return <div key={index}>{line}</div>;
+  });
+}
 
 export default async function AdminFeedbackPage({
   searchParams,
@@ -78,7 +125,9 @@ export default async function AdminFeedbackPage({
                   <FeedbackArchiveButton id={item.id} archived={!!item.archivedAt} />
                 </div>
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-6">{item.content}</p>
+              <div className="mt-3 text-sm leading-6">
+                {renderFeedbackContent(item.content)}
+              </div>
               {item.contact && (
                 <p className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
                   <Mail className="h-3.5 w-3.5" />
