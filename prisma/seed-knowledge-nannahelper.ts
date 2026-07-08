@@ -33,7 +33,7 @@ const CARDS: SeedCard[] = [
 
 对于新生来说，南哪助手是一个获取校园信息、了解学校生活的重要渠道。它的内容通常比较接地气，更贴近学生实际需求。`,
     sourceExcerpt: "南哪助手是南那若干学生自发组成的非营利性民间兴趣小组。",
-    domainTag: "其他",
+    domainTag: "组织资源",
     sourceType: "SENIOR",
     verificationStatus: "NEEDS_REVIEW",
   },
@@ -52,7 +52,7 @@ const CARDS: SeedCard[] = [
 
 一个小提醒：南哪助手是学生自发组织，不是官方机构，所以投稿后可能需要一些时间才会回复。别因为没收到即时回复就放弃，他们可能只是在忙。`,
     sourceExcerpt: "如果你认为你的文章对南那er有帮助，欢迎联系南那助手QQ492711989或邮箱nannahelper@163.com投稿。",
-    domainTag: "其他",
+    domainTag: "组织资源",
     sourceType: "SENIOR",
     verificationStatus: "NEEDS_REVIEW",
   },
@@ -73,7 +73,7 @@ const CARDS: SeedCard[] = [
 
 一个过来人的建议：如果你对南哪助手感兴趣，可以先关注他们的公众号，了解他们平时做什么，看看是否真的符合你的兴趣。别冲动加入后发现和想象的不一样。`,
     sourceExcerpt: "助手团队招新采取「Boss直聘」模式，大家直接私聊小破手QQ（492711989）或小帮手QQ（3238099036）即可！也欢迎大家向助手邮箱（nannahelper@163.com）投递简历！",
-    domainTag: "其他",
+    domainTag: "组织资源",
     sourceType: "SENIOR",
     verificationStatus: "NEEDS_REVIEW",
   },

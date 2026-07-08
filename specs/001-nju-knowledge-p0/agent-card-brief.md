@@ -66,7 +66,7 @@ npx.cmd tsx prisma/tools/fetch-yuque.ts <url>
 - sourceUrl：原文链接（没有就留空）
 - sourceDescription：来源描述，带年份版本
 - sourceType：OFFICIAL / DOCUMENT / SENIOR / AUTHOR_EXPERIENCE / OTHER
-- domainTag：用预定义值（新生入学、三三制、选课规则、校园服务、院系结构、保研转专业、竞赛科研、其他）
+- domainTag：优先用推荐值（新生入学、课程学业、成绩学籍、专业院系、分流转专业、升学发展、科研竞赛、校园办事、网络系统、校园生活、校区交通、组织资源、其他）；确有时兴或特殊主题时，可用简短自定义专题，避免同义重复
 
 下载图片候选时，用抓取工具输出的索引：
 
