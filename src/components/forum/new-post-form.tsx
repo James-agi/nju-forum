@@ -230,9 +230,10 @@ export function NewPostForm({
     Boolean(form.title.trim()) &&
     Boolean(form.sectionId) &&
     (Boolean(form.content.trim()) || images.length > 0);
+  const selectedSection = sections.find((section) => section.id === form.sectionId);
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-6">
       {error && (
         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           {error}
@@ -240,7 +241,10 @@ export function NewPostForm({
       )}
 
       <div className="space-y-2">
-        <Label>分区</Label>
+        <div className="flex items-center justify-between gap-3">
+          <Label>分区</Label>
+          <span className="text-xs text-muted-foreground">选择最主要的场景</span>
+        </div>
         <Select
           value={form.sectionId}
           onValueChange={(value) => setForm({ ...form, sectionId: value })}
@@ -251,11 +255,25 @@ export function NewPostForm({
           <SelectContent>
             {sections.map((section) => (
               <SelectItem key={section.id} value={section.id}>
-                {section.icon} {section.name}
+                <span className="flex flex-col gap-0.5 py-1">
+                  <span>
+                    {section.icon} {section.name}
+                  </span>
+                  {section.description && (
+                    <span className="text-xs text-muted-foreground">
+                      {section.description}
+                    </span>
+                  )}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+        {selectedSection?.description && (
+          <p className="text-xs leading-5 text-muted-foreground">
+            {selectedSection.icon} {selectedSection.name}：{selectedSection.description}
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -316,15 +334,15 @@ export function NewPostForm({
             }
             value={form.content}
             onChange={(e) => setForm({ ...form, content: e.target.value })}
-            rows={form.contentFormat === "markdown" ? 18 : 12}
-            className={cn(form.contentFormat === "markdown" && "min-h-[420px]")}
+            rows={form.contentFormat === "markdown" ? 22 : 18}
+            className={cn("min-h-[360px]", form.contentFormat === "markdown" && "min-h-[520px]")}
           />
           {form.contentFormat === "markdown" && (
-            <div className="min-h-[420px] overflow-hidden rounded-md border bg-background">
+            <div className="min-h-[520px] overflow-hidden rounded-md border bg-background">
               <div className="border-b bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground">
                 预览
               </div>
-              <div className="max-h-[560px] overflow-auto p-4">
+              <div className="max-h-[700px] overflow-auto p-4">
                 {form.content.trim() ? (
                   <PostContent
                     content={form.content}

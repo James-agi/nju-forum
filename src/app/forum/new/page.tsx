@@ -34,7 +34,7 @@ export default async function NewPostPage() {
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-muted/20">
-      <div className="container mx-auto max-w-5xl px-4 py-6">
+      <div className="container mx-auto max-w-7xl px-4 py-6">
         <div className="mb-6">
           <Button asChild variant="ghost" size="sm" className="-ml-3">
             <Link href="/forum">
@@ -44,42 +44,20 @@ export default async function NewPostPage() {
           </Button>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PenSquare className="h-5 w-5" />
-                发布帖子
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <NewPostForm sections={sections} existingTags={existingTags} />
-            </CardContent>
-          </Card>
-
-          <div className="space-y-3">
-            <h2 className="text-sm font-medium text-muted-foreground">可选分区</h2>
-            <div className="grid gap-2">
-              {sections.map((section) => (
-                <button
-                  key={section.id}
-                  type="button"
-                  className="rounded-md border border-border bg-background p-3 text-left transition-colors hover:border-foreground/20"
-                >
-                  <div className="flex items-center gap-2 font-medium">
-                    <span>{section.icon || "📌"}</span>
-                    <span>{section.name}</span>
-                  </div>
-                  {section.description && (
-                    <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                      {section.description}
-                    </p>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PenSquare className="h-5 w-5" />
+              发布帖子
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              先选最贴近内容的分区；分区说明会在选择时展示，标签可用来补充更具体的话题。
+            </p>
+          </CardHeader>
+          <CardContent className="px-4 pb-6 sm:px-6 lg:px-8">
+            <NewPostForm sections={sections} existingTags={existingTags} />
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
