@@ -49,7 +49,9 @@ export const {
   callbacks: {
     async jwt({ token, user, trigger, session }) {
       if (user) {
-        token.id = user.id;
+        if (typeof user.id === "string") {
+          token.id = user.id;
+        }
         token.role = (user as { role: string }).role;
         token.avatar = (user as { avatar: string | null }).avatar;
       }
@@ -62,6 +64,19 @@ export const {
       ) {
         token.avatar = (session as { avatar: string | null }).avatar;
       }
+
+      if (typeof token.id === "string") {
+        const currentUser = await db.user.findUnique({
+          where: { id: token.id },
+          select: { role: true, avatar: true },
+        });
+
+        if (currentUser) {
+          token.role = currentUser.role;
+          token.avatar = currentUser.avatar;
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {

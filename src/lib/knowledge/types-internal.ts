@@ -10,6 +10,7 @@ export interface RetrievalResult {
   card: RetrievalCard;
   score: number;
   matchedTerms: string[];
+  question?: string;
   queryTerms?: string[];
   originalQueryTerms?: string[];
   evidenceChunks?: EvidenceChunk[];

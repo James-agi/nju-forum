@@ -56,7 +56,7 @@ function ParticleBackground() {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fillStyle = dark
-          ? `rgba(255,255,255,${p.alpha})`
+          ? `rgba(135,220,205,${p.alpha * 0.42})`
           : `rgba(0,0,0,${p.alpha * 0.6})`;
         ctx.fill();
 
@@ -71,7 +71,7 @@ function ParticleBackground() {
             ctx.moveTo(p.x, p.y);
             ctx.lineTo(q.x, q.y);
             ctx.strokeStyle = dark
-              ? `rgba(255,255,255,${lineAlpha})`
+              ? `rgba(135,220,205,${lineAlpha * 0.65})`
               : `rgba(0,0,0,${lineAlpha * 0.5})`;
             ctx.lineWidth = 0.5;
             ctx.stroke();
@@ -89,6 +89,14 @@ function ParticleBackground() {
   }, []);
 
   return <canvas ref={canvasRef} className="absolute inset-0 z-0" />;
+}
+
+function getSafeCallbackUrl() {
+  const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl");
+  if (!callbackUrl || !callbackUrl.startsWith("/") || callbackUrl.startsWith("//")) {
+    return "/forum";
+  }
+  return callbackUrl;
 }
 
 export default function LoginPage() {
@@ -114,7 +122,7 @@ export default function LoginPage() {
       if (result?.error) {
         setError("邮箱或密码错误，或账号已被封禁");
       } else {
-        window.location.href = "/forum";
+        window.location.href = getSafeCallbackUrl();
       }
     } catch {
       setError("登录失败，请稍后再试");
@@ -129,9 +137,9 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white dark:bg-black">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-white dark:bg-background">
       <ParticleBackground />
-      <div className="absolute inset-0 z-[1] bg-gradient-to-b from-transparent via-transparent to-white/60 dark:to-black/60" />
+      <div className="absolute inset-0 z-[1] bg-gradient-to-b from-transparent via-transparent to-white/60 dark:to-background/70" />
       <Card className="relative z-10 w-full max-w-md border-border/50 bg-background/80 backdrop-blur-xl">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center border border-border bg-secondary">

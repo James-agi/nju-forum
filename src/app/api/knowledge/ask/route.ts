@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { db } from "@/lib/db";
-import { allowKnowledgeGuest } from "@/lib/knowledge/authz";
+import { requireKnowledgeUser } from "@/lib/knowledge/authz";
 import { buildCardBoundedAnswer } from "@/lib/knowledge/answer";
 import { expandQueryTerms } from "@/lib/knowledge/query-expansion";
 import { checkRateLimit } from "@/lib/knowledge/rate-limit";
@@ -17,6 +17,7 @@ import type { RetrievalResult } from "@/lib/knowledge/types-internal";
 import { TraceBuilder } from "@/lib/knowledge/trace";
 import { getOrCreateConversation, getConversationHistory } from "@/lib/knowledge/conversation";
 import { answerCache } from "@/lib/knowledge/cache";
+import { tryAcquireAskSlot } from "@/lib/knowledge/concurrency";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
   trace.mark("start");
 
   try {
-    const authz = await allowKnowledgeGuest();
+    const authz = await requireKnowledgeUser();
     if (!authz.ok) return authz.response;
 
     const headersList = await headers();
@@ -55,7 +56,7 @@ export async function POST(req: Request) {
     const rateCheck = checkRateLimit(ip, authz.user?.id ?? null);
     if (!rateCheck.allowed) {
       return NextResponse.json(
-        { error: "请求过于频繁，请稍后再试" },
+        { code: "RATE_LIMITED", error: "你问得有点快，稍等几秒再试。" },
         { status: 429, headers: { "Retry-After": String(Math.ceil((rateCheck.retryAfterMs || 12000) / 1000)) } },
       );
     }
@@ -131,6 +132,18 @@ export async function POST(req: Request) {
       }
     }
 
+    const releaseAskSlot = tryAcquireAskSlot();
+    if (!releaseAskSlot) {
+      return NextResponse.json(
+        {
+          code: "ASK_BUSY",
+          error: "当前问答人数较多，请稍后再试。你也可以先查看相关知识卡片。",
+        },
+        { status: 503 },
+      );
+    }
+
+    try {
     let expandedTerms: string[] = [];
     if (responseMode === "think") {
       trace.mark("expansion");
@@ -351,6 +364,9 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(response);
+    } finally {
+      releaseAskSlot();
+    }
   } catch (error) {
     console.error("Error answering knowledge question:", error);
     return NextResponse.json({ error: "知识问答失败" }, { status: 500 });

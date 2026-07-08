@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { extractRetrievalTerms } from "@/lib/knowledge/term-extraction";
 import { scoreCard, isSpec } from "@/lib/knowledge/scoring";
 import { embedQuery } from "@/lib/knowledge/embedding";
@@ -7,6 +8,9 @@ import { GENERIC, STOP } from "@/lib/knowledge/lexicon";
 import {
   KEYWORD_TOP_CUT,
   MAX_MERGED_TERMS,
+  RETRIEVAL_CANDIDATE_MAX_COUNT,
+  RETRIEVAL_CANDIDATE_MIN_COUNT,
+  RETRIEVAL_MIN_STRONG_GATE_TERMS,
   SEMANTIC_TOP_K,
   SEMANTIC_SIMILARITY_THRESHOLD,
   RRF_K,
@@ -54,6 +58,21 @@ const TRANSFER_ACTION_TERMS = [
 ];
 
 const LOCATION_TERMS = ["鼓楼", "仙林", "浦口", "苏州"];
+const RETRIEVAL_CARD_SELECT = {
+  id: true,
+  summary: true,
+  body: true,
+  sourceExcerpt: true,
+  sourceUrl: true,
+  sourceDescription: true,
+  sourceType: true,
+  verificationStatus: true,
+  domainTag: true,
+  createdAt: true,
+  updatedAt: true,
+  archivedAt: true,
+} satisfies Prisma.KnowledgeCardSelect;
+
 const LOCATION_SENSITIVE_SERVICE_TERMS = [
   "洗衣",
   "洗衣店",
@@ -100,6 +119,15 @@ const WEAK_GATE_TERMS = new Set([
   "哪些",
   "哪里",
   "哪儿",
+  "有点",
+  "弱弱",
+  "一句",
+  "经验",
+  "不确定",
+  "确定",
+  "求稳",
+  "说法",
+  "谢谢",
 ]);
 
 function includesTerm(text: string, term: string) {
@@ -116,6 +144,49 @@ function isStrongGateTerm(term: string) {
 
 function getKeywordGateTerms(terms: string[]) {
   return Array.from(new Set(terms.filter(isStrongGateTerm)));
+}
+
+function buildCandidateWhere(gateTerms: string[]): Prisma.KnowledgeCardWhereInput {
+  const contains = (term: string) => ({ contains: term, mode: "insensitive" as const });
+
+  return {
+    archivedAt: null,
+    OR: gateTerms.flatMap((term) => [
+      { summary: contains(term) },
+      { body: contains(term) },
+      { sourceExcerpt: contains(term) },
+      { sourceDescription: contains(term) },
+      { domainTag: contains(term) },
+    ]),
+  };
+}
+
+async function findAllActiveCards() {
+  return db.knowledgeCard.findMany({
+    where: { archivedAt: null },
+    select: RETRIEVAL_CARD_SELECT,
+  });
+}
+
+async function findSafeCandidateCards(gateTerms: string[]) {
+  if (gateTerms.length < RETRIEVAL_MIN_STRONG_GATE_TERMS) {
+    return null;
+  }
+
+  const where = buildCandidateWhere(gateTerms);
+  const candidateCount = await db.knowledgeCard.count({ where });
+
+  if (
+    candidateCount < RETRIEVAL_CANDIDATE_MIN_COUNT ||
+    candidateCount > RETRIEVAL_CANDIDATE_MAX_COUNT
+  ) {
+    return null;
+  }
+
+  return db.knowledgeCard.findMany({
+    where,
+    select: RETRIEVAL_CARD_SELECT,
+  });
 }
 
 function cardMatchesKeywordGate(card: RetrievalResult["card"], gateTerms: string[]) {
@@ -260,14 +331,7 @@ export async function retrieveKnowledgeCards(
 
   if (terms.length === 0 || gateTerms.length === 0) return [];
 
-  const cards = await db.knowledgeCard.findMany({
-    where: { archivedAt: null },
-    select: {
-      id: true, summary: true, body: true, sourceExcerpt: true, sourceUrl: true,
-      sourceDescription: true, sourceType: true, verificationStatus: true,
-      domainTag: true, createdAt: true, updatedAt: true, archivedAt: true,
-    },
-  });
+  const cards = (await findSafeCandidateCards(gateTerms)) ?? await findAllActiveCards();
 
   return cards
     .filter((c) => cardMatchesKeywordGate(c, gateTerms))
@@ -275,6 +339,7 @@ export async function retrieveKnowledgeCards(
       const scored = scoreCard(c, terms);
       return {
         card: c,
+        question,
         queryTerms: terms,
         originalQueryTerms: baseTerms,
         ...scored,
@@ -328,11 +393,7 @@ export async function retrieveHybrid(
     const gateTerms = getKeywordGateTerms(allTerms);
     const cards = await db.knowledgeCard.findMany({
       where: { id: { in: missingIds }, archivedAt: null },
-      select: {
-        id: true, summary: true, body: true, sourceExcerpt: true, sourceUrl: true,
-        sourceDescription: true, sourceType: true, verificationStatus: true,
-        domainTag: true, createdAt: true, updatedAt: true, archivedAt: true,
-      },
+      select: RETRIEVAL_CARD_SELECT,
     });
     semanticOnlyResults = cards
       .filter((c) => cardMatchesKeywordGate(c, gateTerms))
@@ -340,6 +401,7 @@ export async function retrieveHybrid(
         const scored = scoreCard(c, allTerms);
         return {
           card: c,
+          question,
           queryTerms: allTerms,
           originalQueryTerms: terms,
           ...scored,

@@ -314,9 +314,10 @@ describe("evaluateEvidence", () => {
     expect(result.cards.map((item) => item.card.id)).toContain("pukou-repair");
   });
 
-  it("does not let expansion-only identity terms override the original topic anchor", () => {
+  it("rejects related cards that do not directly answer physical library access", () => {
     const results = [
       makeResult({
+        question: "校外人员能不能进南大图书馆",
         score: 16,
         matchedTerms: ["校外", "校外人员"],
         queryTerms: ["校外", "图书馆", "校外人员", "图书馆访问", "入馆规定"],
@@ -328,6 +329,7 @@ describe("evaluateEvidence", () => {
         },
       }),
       makeResult({
+        question: "校外人员能不能进南大图书馆",
         score: 11,
         matchedTerms: ["图书馆"],
         queryTerms: ["校外", "图书馆", "校外人员", "图书馆访问", "入馆规定"],
@@ -341,9 +343,113 @@ describe("evaluateEvidence", () => {
     ];
 
     const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("accepts a card that directly covers outside visitor library entry", () => {
+    const results = [
+      makeResult({
+        question: "校外人员能不能进南大图书馆",
+        score: 16,
+        matchedTerms: ["校外人员", "图书馆", "入馆"],
+        queryTerms: ["校外", "图书馆", "校外人员", "入馆规定"],
+        originalQueryTerms: ["校外", "校外人员", "图书馆"],
+        cardOverrides: {
+          id: "library-visitor-entry",
+          summary: "校外人员进入南京大学图书馆有什么入馆规则？",
+          body: "校外人员如需进入图书馆，应按访客入馆规则办理，并以图书馆当前通知为准。",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
     expect(result.sufficient).toBe(true);
-    expect(result.cards[0].card.id).toBe("library-borrow");
-    expect(result.cards.map((item) => item.card.id)).not.toContain("wrong-travel-reimburse");
+    expect(result.cards[0].card.id).toBe("library-visitor-entry");
+  });
+
+  it("does not answer library closing-time questions from generic library cards", () => {
+    const results = [
+      makeResult({
+        question: "图书馆几点关门",
+        score: 11,
+        matchedTerms: ["图书馆"],
+        queryTerms: ["图书馆", "几点", "关门"],
+        originalQueryTerms: ["图书馆", "几点", "关门"],
+        cardOverrides: {
+          id: "library-borrow",
+          summary: "南京大学图书馆借书的基本流程是什么？",
+          body: "图书馆借书需要通过统一检索系统查找图书，并到服务台或自助机办理。",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("does not answer current mentor availability from generic project-process cards", () => {
+    const results = [
+      makeResult({
+        question: "哪个导师今年还缺学生",
+        score: 5,
+        matchedTerms: ["导师"],
+        queryTerms: ["导师", "今年", "还缺", "学生"],
+        originalQueryTerms: ["导师", "今年", "还缺", "学生"],
+        cardOverrides: {
+          id: "innovation-process",
+          summary: "创新项目申报、中期、结题和变更分别怎么做？",
+          body: "创新项目申报时需要填写项目成员、指导教师和材料，按学院通知提交。",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("does not answer late-night dining questions from transportation-only cards", () => {
+    const results = [
+      makeResult({
+        question: "苏州校区晚上十点后哪里还能吃饭",
+        score: 14,
+        matchedTerms: ["苏州", "路线", "夜间"],
+        queryTerms: ["苏州", "校区", "晚上", "十点后", "吃饭", "路线"],
+        originalQueryTerms: ["苏州", "校区", "晚上", "十点后", "吃饭"],
+        cardOverrides: {
+          id: "suzhou-night-bus",
+          summary: "从苏州各火车站怎么到苏州校区？苏州校区夜间没有公交怎么办？",
+          body: "夜间没有公交时，可以考虑打车或提前规划有轨电车和地铁路线。",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("does not answer exact current course teacher questions from broad course-selection advice", () => {
+    const results = [
+      makeResult({
+        question: "今年某门课具体谁教，我有点不确定",
+        score: 12,
+        matchedTerms: ["选课", "老师", "课程"],
+        queryTerms: ["今年", "某门课", "具体", "谁教", "选课", "老师", "课程"],
+        originalQueryTerms: ["今年", "某门课", "具体", "谁教"],
+        cardOverrides: {
+          id: "course-selection-advice",
+          summary: "南京大学新生选课前应该怎么比较老师和课程？",
+          body: "选课前可以比较不同老师的考核方式、点名方式和课程评价，建议多问学长学姐。",
+        },
+      }),
+    ];
+
+    const result = evaluateEvidence(results);
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
   });
 
   it("accepts a reinforced single Chinese domain anchor", () => {

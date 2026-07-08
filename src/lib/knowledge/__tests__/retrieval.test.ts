@@ -4,6 +4,7 @@ import type { RetrievalResult } from "../types-internal";
 vi.mock("@/lib/db", () => ({
   db: {
     knowledgeCard: {
+      count: vi.fn(),
       findMany: vi.fn(),
     },
   },
@@ -27,7 +28,12 @@ vi.mock("@/lib/knowledge/embedding", () => ({
 }));
 
 import { db as realDb } from "@/lib/db";
-const db = realDb as unknown as { knowledgeCard: { findMany: ReturnType<typeof vi.fn> } };
+const db = realDb as unknown as {
+  knowledgeCard: {
+    count: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+  };
+};
 
 const TRANSFER = "\u8f6c\u4e13\u4e1a";
 const TRANSFER_QUESTION = "\u8f6c\u4e13\u4e1a\u9700\u8981\u4ec0\u4e48\u6761\u4ef6";
@@ -57,6 +63,7 @@ async function importRetrieval() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockExtractRetrievalTerms.mockResolvedValue([TRANSFER]);
+  db.knowledgeCard.count.mockResolvedValue(0);
 });
 
 describe("retrieveKnowledgeCards", () => {
@@ -88,6 +95,55 @@ describe("retrieveKnowledgeCards", () => {
     expect(results[0].card.id).toBe("c1");
     expect(results[0].score).toBeGreaterThan(0);
     expect(results[0].queryTerms).toEqual([TRANSFER]);
+  });
+
+  it("uses the candidate pool only when candidate count is in the safe interval", async () => {
+    mockExtractRetrievalTerms.mockResolvedValue(["\u8f6c\u4e13\u4e1a", "\u7ee9\u70b9"]);
+    const cards = [
+      makeCard({ id: "c1", summary: "\u8f6c\u4e13\u4e1a\u6d41\u7a0b", body: "\u8f6c\u4e13\u4e1a\u9700\u8981\u7ee9\u70b9\u524d30%" }),
+    ];
+    db.knowledgeCard.count.mockResolvedValue(120);
+    db.knowledgeCard.findMany.mockResolvedValue(cards);
+
+    const { retrieveKnowledgeCards } = await importRetrieval();
+    const results = await retrieveKnowledgeCards(TRANSFER_QUESTION);
+
+    expect(db.knowledgeCard.count).toHaveBeenCalledTimes(1);
+    const countArgs = db.knowledgeCard.count.mock.calls[0][0];
+    expect(countArgs.where.archivedAt).toBeNull();
+    expect(countArgs.where.OR.length).toBeGreaterThan(0);
+
+    const findArgs = db.knowledgeCard.findMany.mock.calls[0][0];
+    expect(findArgs.where).toEqual(countArgs.where);
+    expect(results.map((result) => result.card.id)).toEqual(["c1"]);
+  });
+
+  it("falls back to full scan when there is only one strong gate term", async () => {
+    db.knowledgeCard.count.mockResolvedValue(120);
+    db.knowledgeCard.findMany.mockResolvedValue([
+      makeCard({ id: "c1", summary: "\u8f6c\u4e13\u4e1a\u6d41\u7a0b", body: "\u8f6c\u4e13\u4e1a\u9700\u8981\u7ee9\u70b9\u524d30%" }),
+    ]);
+
+    const { retrieveKnowledgeCards } = await importRetrieval();
+    await retrieveKnowledgeCards(TRANSFER_QUESTION);
+
+    expect(db.knowledgeCard.count).not.toHaveBeenCalled();
+    const findArgs = db.knowledgeCard.findMany.mock.calls[0][0];
+    expect(findArgs.where).toEqual({ archivedAt: null });
+  });
+
+  it("falls back to full scan when candidate count is too broad", async () => {
+    mockExtractRetrievalTerms.mockResolvedValue(["\u8f6c\u4e13\u4e1a", "\u7ee9\u70b9"]);
+    db.knowledgeCard.count.mockResolvedValue(800);
+    db.knowledgeCard.findMany.mockResolvedValue([
+      makeCard({ id: "c1", summary: "\u8f6c\u4e13\u4e1a\u6d41\u7a0b", body: "\u8f6c\u4e13\u4e1a\u9700\u8981\u7ee9\u70b9\u524d30%" }),
+    ]);
+
+    const { retrieveKnowledgeCards } = await importRetrieval();
+    await retrieveKnowledgeCards(TRANSFER_QUESTION);
+
+    const findArgs = db.knowledgeCard.findMany.mock.calls[0][0];
+    expect(findArgs.where).toEqual({ archivedAt: null });
   });
 
   it("prioritizes general transfer cards for broad transfer-advice questions", async () => {

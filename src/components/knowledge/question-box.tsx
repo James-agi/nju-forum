@@ -18,6 +18,17 @@ import {
 
 type GroupedCitation = Omit<CitationDTO, "claimText"> & { claimTexts: string[] };
 type AnswerMode = "cards" | "think";
+type AskErrorResponse = { code?: string; error?: string };
+
+function getAskErrorMessage(data: AskErrorResponse) {
+  if (data.code === "RATE_LIMITED") {
+    return "你问得有点快，稍等几秒再试。";
+  }
+  if (data.code === "ASK_BUSY") {
+    return "当前问答人数较多，请稍后再试。你也可以先查看相关知识卡片。";
+  }
+  return data.error || "提问失败";
+}
 
 function groupCitations(citations: CitationDTO[]): GroupedCitation[] {
   const map = new Map<string, GroupedCitation>();
@@ -64,7 +75,7 @@ export function QuestionBox() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "提问失败");
+        setError(getAskErrorMessage(data));
         return;
       }
 

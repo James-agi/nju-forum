@@ -35,6 +35,11 @@ const GENERAL_OUT_OF_SCOPE_RULES: ScopeRule[] = [
     label: "通用旅行购物",
     keywords: ["周末去哪玩", "去哪玩", "旅游", "购物", "买什么"],
   },
+  {
+    code: "GENERAL_CONSUMER_ADVICE",
+    label: "通用消费或硬件推荐",
+    keywords: ["显卡", "打游戏", "游戏本", "装机", "电脑配置"],
+  },
 ];
 
 const HARD_OUT_OF_SCOPE_RULES: ScopeRule[] = [

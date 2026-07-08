@@ -26,6 +26,7 @@ const LOCATION_SENSITIVE_SERVICE_TERMS = [
   "理发",
   "理发店",
   "剪头发",
+  "发店",
   "打印",
   "打印店",
   "快递",
@@ -100,6 +101,15 @@ const NON_EVIDENCE_TERMS = new Set([
   "今年",
   "相关",
   "问题",
+  "有点",
+  "弱弱",
+  "一句",
+  "经验",
+  "不确定",
+  "确定",
+  "求稳",
+  "说法",
+  "谢谢",
 ]);
 const ORIGINAL_ANCHOR_STOP_TERMS = new Set([
   "校外",
@@ -117,6 +127,71 @@ const ORIGINAL_ANCHOR_STOP_TERMS = new Set([
   "哪里",
   "哪儿",
 ]);
+const DIRECT_ANSWER_QUERY_PATTERNS = [
+  /能不能|能否|可不可以|可以.{0,8}吗|是否|是不是|有没有|有.{0,12}吗/,
+  /几点|开门|关门|闭馆|开馆|营业|营业时间|开放时间/,
+  /哪里.{0,8}(吃饭|吃点|吃的|餐饮|食堂|餐厅|夜宵)|晚上|夜间|十点后/,
+  /允许|让不让|能进|进馆|入馆|进校|入校|进入.{0,8}图书馆|进.{0,8}图书馆/,
+  /今年|当前|现在|还剩|余量|缺学生|还缺|稳不稳/,
+];
+const DIRECT_ANSWER_ANCHOR_TERMS = new Set([
+  "校外",
+  "校外人员",
+  "访客",
+  "外来人员",
+  "人员",
+  "入馆",
+  "进馆",
+  "进校",
+  "入校",
+  "进入",
+  "访问",
+  "允许",
+  "开放",
+  "几点",
+  "时间",
+  "开放时间",
+  "营业时间",
+  "关门",
+  "开门",
+  "闭馆",
+  "开馆",
+  "营业",
+  "缺学生",
+  "还缺",
+  "名额",
+  "余量",
+  "还剩",
+  "吃饭",
+  "餐饮",
+  "食堂",
+  "饭点",
+  "夜宵",
+  "老师",
+  "谁教",
+  "授课老师",
+  "任课老师",
+]);
+const DIRECT_ANSWER_RELATED_TERMS: Record<string, string[]> = {
+  "校外": ["校外", "校外人员", "访客", "外来人员"],
+  "校外人员": ["校外", "校外人员", "访客", "外来人员"],
+  "人员": ["人员", "校外人员", "访客", "外来人员"],
+  "入馆": ["入馆", "进馆", "进入图书馆", "进图书馆"],
+  "进馆": ["入馆", "进馆", "进入图书馆", "进图书馆"],
+  "进入": ["入馆", "进馆", "进入图书馆", "进图书馆", "进入"],
+  "时间": ["开放时间", "营业时间", "关门时间", "开门时间", "闭馆时间", "开馆时间"],
+  "几点": ["开放时间", "营业时间", "关门时间", "开门时间", "闭馆时间", "开馆时间"],
+  "关门": ["关门时间", "闭馆时间", "几点关门", "几点闭馆"],
+  "开门": ["开门时间", "开馆时间", "几点开门", "几点开馆"],
+  "闭馆": ["关门时间", "闭馆时间", "几点关门", "几点闭馆"],
+  "开馆": ["开门时间", "开馆时间", "几点开门", "几点开馆"],
+  "营业": ["营业", "营业时间", "开放时间", "开门", "关门"],
+  "营业时间": ["营业", "营业时间", "开放时间", "开门", "关门"],
+  "开放时间": ["时间", "开放时间", "营业时间", "开门", "关门", "闭馆", "开馆"],
+  "名额状态": ["缺学生", "还缺学生", "招生名额", "剩余名额", "名额余量", "还剩几个", "余量"],
+  "餐饮供给": ["吃饭", "餐饮", "食堂", "餐厅", "夜宵", "饭点", "外卖", "营业时间", "开放时间"],
+  "授课教师": ["谁教", "教师名单", "课程教师名单", "主讲教师", "开课教师", "任课教师名单", "授课教师名单"],
+};
 const DIRECT_TITLE_ANCHORS = new Set([
   "缴费",
   "学费",
@@ -279,6 +354,11 @@ function isLocationSensitiveServiceQuery(result: RetrievalResult) {
   return (result.queryTerms || []).some((term) => LOCATION_SENSITIVE_SERVICE_TERMS.includes(term));
 }
 
+function cardCoversLocationSensitiveService(result: RetrievalResult) {
+  const text = evidenceSearchText(result);
+  return LOCATION_SENSITIVE_SERVICE_TERMS.some((term) => includesReliableTerm(text, term));
+}
+
 function hasLocationInSummary(result: RetrievalResult) {
   const summary = result.card.summary.toLowerCase();
   return LOCATION_TERMS.some((term) => includesReliableTerm(summary, term));
@@ -299,6 +379,96 @@ function missesOriginalCoreAnchor(result: RetrievalResult) {
   return !originalCoreAnchors.some((term) => matched.has(term.toLowerCase()));
 }
 
+function uniqueTerms(terms: string[]) {
+  return Array.from(new Set(terms.map((term) => term.toLowerCase())));
+}
+
+function evidenceSearchText(result: RetrievalResult) {
+  return [
+    result.card.summary,
+    result.card.body,
+    result.card.sourceExcerpt || "",
+    result.card.sourceDescription,
+    result.card.domainTag,
+  ].join("\n").toLowerCase();
+}
+
+function directAnswerQuestionText(result: RetrievalResult) {
+  return (
+    result.question ||
+    (result.originalQueryTerms || result.queryTerms || []).join("")
+  ).toLowerCase();
+}
+
+function isDirectAnswerAnchor(term: string) {
+  const normalized = term.toLowerCase();
+  return DIRECT_ANSWER_ANCHOR_TERMS.has(normalized) || isDomainAnchor(normalized);
+}
+
+function requiredDirectAnswerAnchors(question: string) {
+  const required: string[] = [];
+  if (/校外|校外人员|访客|外来人员/.test(question)) {
+    required.push("校外");
+  }
+  if (/入馆|进馆|进入.{0,8}图书馆|进.{0,8}图书馆/.test(question)) {
+    required.push("入馆");
+  }
+  if (/关门|闭馆/.test(question)) {
+    required.push("关门");
+  } else if (/开门|开馆/.test(question)) {
+    required.push("开门");
+  } else if (/几点|营业|营业时间|开放时间/.test(question)) {
+    required.push("时间");
+  }
+  if (/缺学生|还缺|还剩|余量|名额还剩/.test(question)) {
+    required.push("名额状态");
+  }
+  if (/吃饭|吃点|吃什么|吃的|餐饮|食堂|餐厅|夜宵/.test(question)) {
+    required.push("餐饮供给");
+  }
+  if (/谁教|哪位老师|哪个老师|授课老师|任课老师|具体.{0,6}老师/.test(question)) {
+    required.push("授课教师");
+  }
+  return required;
+}
+
+function directAnswerAnchors(result: RetrievalResult) {
+  const baseTerms = result.originalQueryTerms?.length ? result.originalQueryTerms : result.queryTerms || [];
+  const question = directAnswerQuestionText(result);
+  return uniqueTerms([
+    ...baseTerms.filter(isDirectAnswerAnchor),
+    ...requiredDirectAnswerAnchors(question),
+  ]);
+}
+
+function anchorEvidenceTerms(anchor: string) {
+  return DIRECT_ANSWER_RELATED_TERMS[anchor] || [anchor];
+}
+
+function evidenceCoversAnchor(text: string, anchor: string) {
+  return anchorEvidenceTerms(anchor).some((term) => includesReliableTerm(text, term));
+}
+
+function requiresDirectAnswerability(result: RetrievalResult) {
+  const question = directAnswerQuestionText(result);
+  if (!DIRECT_ANSWER_QUERY_PATTERNS.some((pattern) => pattern.test(question))) return false;
+  if (requiredDirectAnswerAnchors(question).length > 0) return true;
+  return directAnswerAnchors(result).length >= 2;
+}
+
+function missesDirectAnswerability(result: RetrievalResult) {
+  if (!requiresDirectAnswerability(result)) return false;
+
+  const anchors = directAnswerAnchors(result);
+  const text = evidenceSearchText(result);
+  const required = requiredDirectAnswerAnchors(directAnswerQuestionText(result));
+
+  if (required.some((anchor) => !evidenceCoversAnchor(text, anchor))) return true;
+
+  const coveredCount = anchors.filter((anchor) => evidenceCoversAnchor(text, anchor)).length;
+  return coveredCount < Math.min(2, anchors.length);
+}
+
 function isLocationServiceWithoutQueryLocation(results: RetrievalResult[]) {
   return results.some((result) => (
     isLocationSensitiveServiceQuery(result) && !hasQueryLocation(result)
@@ -317,6 +487,7 @@ function hasLimitedBroadEvidence(result: RetrievalResult) {
   if (result.card.verificationStatus !== "VERIFIED") return false;
   if (missesRequiredLocationConstraint(result)) return false;
   if (missesOriginalCoreAnchor(result)) return false;
+  if (missesDirectAnswerability(result) && !cardCoversLocationSensitiveService(result)) return false;
   if (!isLimitedDetailQuery(result)) return false;
   if (result.score < MIN_LIMITED_BROAD_SCORE) return false;
   return result.matchedTerms.some(isDomainAnchor);
@@ -355,6 +526,7 @@ function hasSectionEvidence(result: RetrievalResult, contentStrongTerms: string[
 function hasStrongEvidence(result: RetrievalResult) {
   if (missesRequiredLocationConstraint(result)) return false;
   if (missesOriginalCoreAnchor(result)) return false;
+  if (missesDirectAnswerability(result)) return false;
 
   const summary = result.card.summary.toLowerCase();
   const body = result.card.body.toLowerCase();
@@ -378,6 +550,7 @@ function hasDirectTitleEvidence(result: RetrievalResult) {
   if (result.card.verificationStatus !== "VERIFIED") return false;
   if (missesRequiredLocationConstraint(result)) return false;
   if (missesOriginalCoreAnchor(result)) return false;
+  if (missesDirectAnswerability(result)) return false;
   if (result.score < MIN_DIRECT_TITLE_SCORE) return false;
 
   const summary = result.card.summary.toLowerCase();

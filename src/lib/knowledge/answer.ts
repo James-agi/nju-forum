@@ -8,13 +8,26 @@ export interface AnswerCitationDraft {
 }
 
 export type AnswerMode = "LLM" | "FALLBACK";
-export type FallbackReason = "NO_CONFIG" | "HTTP_ERROR" | "TIMEOUT" | "PARSE_ERROR" | "EMPTY_RESULT" | "EXCEPTION";
+export type FallbackReason =
+  | "NO_CONFIG"
+  | "HTTP_ERROR"
+  | "TIMEOUT"
+  | "PARSE_ERROR"
+  | "EMPTY_RESULT"
+  | "EXCEPTION"
+  | "VALIDATION_FAILED";
 
 export interface CardBoundedAnswer {
   answerText: string;
   citations: AnswerCitationDraft[];
   answerMode: AnswerMode;
   fallbackReason?: FallbackReason;
+}
+
+interface AnswerValidationResult {
+  ok: boolean;
+  answerText: string;
+  reason?: FallbackReason;
 }
 
 const SYSTEM_PROMPT =
@@ -24,6 +37,7 @@ const SYSTEM_PROMPT =
   "不能把卡片里的适用对象、专业、大类、年级或校区假定成用户本人情况；如果卡片只适用于特定对象，必须写成“如果你属于该对象”。" +
   "如果用户没有说明校区，而证据卡片只覆盖某一个校区，不能把该校区地点当作直接答案；必须说明“这张卡只覆盖某校区”，并建议用户补充校区。" +
   "如果证据卡片覆盖多个校区或同时包含通用卡和单校区卡，必须综合多张卡，按校区或适用范围分别归纳，不能只回答第一张卡。" +
+  "如果用户问题包含多个子问题、多个地点、多个方式或多个对象，而证据只覆盖其中一部分，必须明确说明哪些部分有证据、哪些部分没有证据，不能把未覆盖部分静默省略。" +
   "如果不同卡片存在限制或例外，必须优先保留限制条件，不能给出与限制相反的确定建议。" +
   "如果问题询问实时状态、当天情况、年度变化、具体余量或精确数值，而卡片只提供一般规则/路径，只能回答一般信息和查询路径，并明确说明不能确认实时或个人化结果。" +
   "输出严格 JSON：{\"answer\":\"...\",\"citations\":[{\"cardId\":\"...\",\"claimText\":\"...\"}]}。" +
@@ -40,6 +54,22 @@ const LIMITED_ANSWER_PATTERNS = [
 const LIMITED_ANSWER_NOTE =
   "注意：这个问题包含实时、年度变化或精确细节。知识库只能提供已有卡片里的通用信息和查询路径，不能确认实时状态、个人数据或当年最终结果。";
 const LOCATION_TERMS = ["鼓楼", "仙林", "浦口", "苏州"];
+const EXPLICIT_COVERAGE_GROUPS = [
+  { terms: ["校车", "班车"], label: "校车/班车" },
+];
+const GROUNDED_TERM_GROUPS = [
+  ["鼓楼"],
+  ["仙林"],
+  ["浦口"],
+  ["苏州"],
+  ["工科试验班", "工试"],
+  ["技术科学试验班", "技科"],
+  ["人工智能", "AI", "ai"],
+  ["天文", "天文学"],
+  ["法学", "法学院"],
+  ["化生", "化学", "生物"],
+  ["校车", "班车"],
+];
 
 function needsLimitedAnswerNote(question: string) {
   return LIMITED_ANSWER_PATTERNS.some((pattern) => pattern.test(question));
@@ -75,6 +105,28 @@ function evidenceLocationScope(evidence: RetrievalResult[]) {
   return Array.from(locations);
 }
 
+function evidenceText(evidence: RetrievalResult[]) {
+  return evidence.map((result) => {
+    const chunks = result.evidenceChunks?.map((chunk) => chunk.text).join("\n") || "";
+    return `${result.card.summary}\n${trimForAnswer(result.card.body, 500)}\n${chunks}`;
+  }).join("\n");
+}
+
+function appendPartialCoverageNote(question: string, answer: string, evidence: RetrievalResult[]) {
+  if (answer.includes("证据缺口")) return answer;
+
+  const text = evidenceText(evidence);
+  const missingGroups = EXPLICIT_COVERAGE_GROUPS.filter((group) => {
+    const asked = group.terms.some((term) => includesTerm(question, term));
+    const covered = group.terms.some((term) => includesTerm(text, term));
+    return asked && !covered;
+  });
+
+  if (missingGroups.length === 0) return answer;
+
+  return `${answer}\n\n证据缺口：当前引用卡片没有覆盖${missingGroups.map((group) => `「${group.label}」`).join("、")}信息，不能确认这部分；以上回答只覆盖引用卡片中已有的信息。`;
+}
+
 function appendSingleCampusScopeNote(question: string, answer: string, evidence: RetrievalResult[]) {
   if (LOCATION_TERMS.some((location) => includesTerm(question, location))) return answer;
   if (answer.includes("范围提示")) return answer;
@@ -86,7 +138,50 @@ function appendSingleCampusScopeNote(question: string, answer: string, evidence:
 }
 
 function finalizeAnswerText(question: string, answer: string, evidence: RetrievalResult[]) {
-  return appendSingleCampusScopeNote(question, appendLimitedAnswerNote(question, answer), evidence);
+  return appendSingleCampusScopeNote(
+    question,
+    appendPartialCoverageNote(question, appendLimitedAnswerNote(question, answer), evidence),
+    evidence,
+  );
+}
+
+function hasAnyTerm(text: string, terms: string[]) {
+  return terms.some((term) => includesTerm(text, term));
+}
+
+function validateGroundedAnswer(
+  question: string,
+  answer: string,
+  citations: AnswerCitationDraft[],
+  evidence: RetrievalResult[],
+): AnswerValidationResult {
+  const answerText = finalizeAnswerText(question, answer, evidence);
+  const supportedText = `${question}\n${evidenceText(evidence)}`;
+
+  for (const group of GROUNDED_TERM_GROUPS) {
+    if (!hasAnyTerm(answerText, group)) continue;
+    if (hasAnyTerm(supportedText, group)) continue;
+
+    return {
+      ok: false,
+      answerText,
+      reason: "VALIDATION_FAILED",
+    };
+  }
+
+  const allowedCardIds = new Set(evidence.map((r) => r.card.id));
+  if (citations.some((citation) => !allowedCardIds.has(citation.cardId))) {
+    return {
+      ok: false,
+      answerText,
+      reason: "VALIDATION_FAILED",
+    };
+  }
+
+  return {
+    ok: true,
+    answerText,
+  };
 }
 
 function trimForAnswer(text: string, maxLength = 320) {
@@ -212,8 +307,14 @@ export async function buildCardBoundedAnswer(
     return fallback;
   }
 
+  const validation = validateGroundedAnswer(question, parsed.answer.trim(), citations, evidence);
+  if (!validation.ok) {
+    fallback.fallbackReason = validation.reason;
+    return fallback;
+  }
+
   return {
-    answerText: finalizeAnswerText(question, parsed.answer.trim(), evidence),
+    answerText: validation.answerText,
     citations,
     answerMode: "LLM",
   };

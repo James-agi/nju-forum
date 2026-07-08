@@ -10,6 +10,7 @@ vi.mock("@/lib/knowledge/llm-client", async () => {
 });
 
 import { buildCardBoundedAnswer } from "../answer";
+import { chatCompletion } from "../llm-client";
 
 function makeResult(): RetrievalResult {
   return {
@@ -34,6 +35,43 @@ function makeResult(): RetrievalResult {
 }
 
 describe("buildCardBoundedAnswer", () => {
+  it("falls back when the LLM answer introduces unsupported campus context", async () => {
+    vi.mocked(chatCompletion).mockResolvedValueOnce(JSON.stringify({
+      answer: "你可以去苏州校区处理这个问题。",
+      citations: [{ cardId: "card-1", claimText: "苏州校区可以处理" }],
+    }));
+
+    const result = makeResult();
+    result.card.summary = "鼓楼到浦口校区怎么通勤？";
+    result.card.body = "鼓楼到浦口可以参考公共交通和校园班车路线。";
+
+    const answer = await buildCardBoundedAnswer("鼓楼到浦口怎么通勤", [result]);
+
+    expect(answer.answerMode).toBe("FALLBACK");
+    expect(answer.fallbackReason).toBe("VALIDATION_FAILED");
+    expect(answer.answerText).not.toContain("苏州校区处理");
+  });
+
+  it("keeps a valid LLM answer and appends a partial coverage note when needed", async () => {
+    vi.mocked(chatCompletion).mockResolvedValueOnce(JSON.stringify({
+      answer: "从鼓楼到仙林可以参考地铁和公交路线。",
+      citations: [{ cardId: "card-1", claimText: "鼓楼到仙林可参考地铁和公交路线" }],
+    }));
+
+    const result = makeResult();
+    result.card.summary = "鼓楼北园到仙林校区怎么通勤？地铁路线和公交路线是什么？";
+    result.card.body = "从鼓楼北园到仙林校区，推荐优先选择地铁，也可以选择公交换乘。";
+    result.matchedTerms = ["鼓楼", "仙林", "通勤", "地铁", "公交"];
+    result.queryTerms = ["鼓楼", "仙林", "通勤", "校车", "班车"];
+
+    const answer = await buildCardBoundedAnswer("鼓楼到仙林怎么通勤，校车和班车怎么坐", [result]);
+
+    expect(answer.answerMode).toBe("LLM");
+    expect(answer.answerText).toContain("从鼓楼到仙林可以参考地铁和公交路线");
+    expect(answer.answerText).toContain("证据缺口");
+    expect(answer.answerText).toContain("校车/班车");
+  });
+
   it("adds a limited-answer note for dynamic detail questions in fallback mode", async () => {
     const answer = await buildCardBoundedAnswer("明天鼓楼到浦口班车还有没有票", [makeResult()]);
 
@@ -99,5 +137,19 @@ describe("buildCardBoundedAnswer", () => {
     const answer = await buildCardBoundedAnswer("仙林宿舍没电了怎么办", [result]);
 
     expect(answer.answerText).not.toContain("范围提示");
+  });
+
+  it("adds a partial coverage note when explicit transit modes are not covered by evidence", async () => {
+    const result = makeResult();
+    result.card.summary = "鼓楼北园到仙林校区怎么通勤？地铁路线和公交路线是什么？";
+    result.card.body = "从鼓楼北园到仙林校区，推荐优先选择地铁，也可以选择公交换乘。";
+    result.matchedTerms = ["鼓楼", "仙林", "通勤", "地铁", "公交"];
+    result.queryTerms = ["鼓楼", "仙林", "通勤", "校车", "班车"];
+
+    const answer = await buildCardBoundedAnswer("鼓楼到仙林怎么通勤，校车和班车怎么坐", [result]);
+
+    expect(answer.answerText).toContain("证据缺口");
+    expect(answer.answerText).toContain("校车/班车");
+    expect(answer.answerText).toContain("不能确认这部分");
   });
 });

@@ -218,6 +218,12 @@ describe("classifyP0Scope", () => {
     expect(result.inScope).toBe(false);
     expect(result.code).toBe("PAYMENT");
   });
+
+  it("rejects general hardware recommendations without campus context", () => {
+    const result = classifyP0Scope("推荐一款适合打游戏的显卡");
+    expect(result.inScope).toBe(false);
+    expect(result.code).toBe("GENERAL_CONSUMER_ADVICE");
+  });
 });
 
 describe("classifyNoResult", () => {
@@ -251,6 +257,15 @@ describe("extractRetrievalTerms aliases", () => {
     );
     await expect(extractRetrievalTerms("计算机类一般在哪个校区")).resolves.toEqual(
       expect.arrayContaining(["计算机类", "在哪个校区", "院系", "校区归属"]),
+    );
+  });
+
+  it("keeps generic library borrowing separate from cross-campus borrowing", async () => {
+    await expect(extractRetrievalTerms("南京大学图书馆借书的基本流程是什么")).resolves.not.toEqual(
+      expect.arrayContaining(["跨校区借书", "跨校区借阅"]),
+    );
+    await expect(extractRetrievalTerms("跨校区借书怎么弄")).resolves.toEqual(
+      expect.arrayContaining(["跨校区借书", "跨校区借阅", "借书", "借阅"]),
     );
   });
 });
