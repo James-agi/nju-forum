@@ -24,6 +24,12 @@ function getAskErrorMessage(data: AskErrorResponse) {
   if (data.code === "RATE_LIMITED") {
     return "你问得有点快，稍等几秒再试。";
   }
+  if (data.code === "ASK_THINK_BUSY") {
+    return "当前思考回答人数较多，请稍后再试。你也可以先切到「不思考」查看相关知识卡片。";
+  }
+  if (data.code === "ASK_CARDS_BUSY") {
+    return "当前找卡片人数较多，请稍后再试。";
+  }
   if (data.code === "ASK_BUSY") {
     return "当前问答人数较多，请稍后再试。你也可以先查看相关知识卡片。";
   }

@@ -16,7 +16,9 @@ export const GUEST_REFILL_RATE = 5 / 60;
 export const USER_MAX_TOKENS = 6;
 export const USER_REFILL_RATE = 6 / 60;
 export const RATE_LIMIT_WINDOW_MS = 60_000;
-export const ASK_GLOBAL_CONCURRENCY = 10;
+export const ASK_GLOBAL_CONCURRENCY = 12;
+export const ASK_THINK_CONCURRENCY = 5;
+export const ASK_CARDS_CONCURRENCY = 10;
 
 // Retrieval
 export const KEYWORD_TOP_CUT = 20;

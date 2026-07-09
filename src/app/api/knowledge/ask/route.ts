@@ -17,7 +17,7 @@ import type { RetrievalResult } from "@/lib/knowledge/types-internal";
 import { TraceBuilder } from "@/lib/knowledge/trace";
 import { getOrCreateConversation, getConversationHistory } from "@/lib/knowledge/conversation";
 import { answerCache } from "@/lib/knowledge/cache";
-import { tryAcquireAskSlot } from "@/lib/knowledge/concurrency";
+import { tryAcquireAskSlot, type AskConcurrencyBusyReason } from "@/lib/knowledge/concurrency";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +40,27 @@ function toDirectCardDTO(result: RetrievalResult): DirectCardDTO {
     domainTag: result.card.domainTag,
     score: result.score,
     matchedTerms: result.matchedTerms,
+  };
+}
+
+function getAskBusyPayload(reason: AskConcurrencyBusyReason) {
+  if (reason === "think") {
+    return {
+      code: "ASK_THINK_BUSY",
+      error: "当前思考回答人数较多，请稍后再试。你也可以先切到「不思考」查看相关知识卡片。",
+    };
+  }
+
+  if (reason === "cards") {
+    return {
+      code: "ASK_CARDS_BUSY",
+      error: "当前找卡片人数较多，请稍后再试。",
+    };
+  }
+
+  return {
+    code: "ASK_BUSY",
+    error: "当前问答人数较多，请稍后再试。你也可以先查看相关知识卡片。",
   };
 }
 
@@ -132,15 +153,9 @@ export async function POST(req: Request) {
       }
     }
 
-    const releaseAskSlot = tryAcquireAskSlot();
-    if (!releaseAskSlot) {
-      return NextResponse.json(
-        {
-          code: "ASK_BUSY",
-          error: "当前问答人数较多，请稍后再试。你也可以先查看相关知识卡片。",
-        },
-        { status: 503 },
-      );
+    const askSlot = tryAcquireAskSlot(responseMode);
+    if (!askSlot.ok) {
+      return NextResponse.json(getAskBusyPayload(askSlot.reason), { status: 503 });
     }
 
     try {
@@ -365,7 +380,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(response);
     } finally {
-      releaseAskSlot();
+      askSlot.release();
     }
   } catch (error) {
     console.error("Error answering knowledge question:", error);
