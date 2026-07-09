@@ -28,8 +28,6 @@ import {
   LogOut,
   Menu,
   MessageSquare,
-  PenSquare,
-  Search,
   Settings,
   User,
 } from "lucide-react";
@@ -46,6 +44,8 @@ export function Navbar() {
   const user = session?.user;
   const isAdmin = user?.role === "ADMIN";
   const avatarSrc = user?.avatar ?? undefined;
+  const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "用户";
+  const displayEmail = user?.email ?? "";
 
   return (
     <header className="sticky top-0 z-50 px-4 pt-3">
@@ -57,9 +57,6 @@ export function Navbar() {
 
         {/* 桌面端导航 */}
         <nav className="hidden items-center gap-2 md:flex">
-          <Link href="/search" aria-label="搜索" title="搜索" className={iconBox}>
-            <Search className="h-4 w-4" />
-          </Link>
           <ThemeToggle />
           <Button asChild variant="ghost" size="sm">
             <Link href="/knowledge">
@@ -71,39 +68,33 @@ export function Navbar() {
             <div className="h-8 w-16 animate-pulse rounded bg-muted" />
           ) : user ? (
             <>
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/forum/new">
-                  <PenSquare className="mr-2 h-4 w-4" />
-                  发帖
-                </Link>
-              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={avatarSrc} alt={user.name ?? ""} />
+                      <AvatarImage src={avatarSrc} alt={displayName} />
                       <AvatarFallback>
-                        {user.name?.charAt(0) || "U"}
+                        {displayName.charAt(0)}
                       </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
-                  <div className="flex items-center gap-2 p-2">
-                    <p className="text-sm font-medium">{user.name}</p>
-                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="min-w-0 px-2 py-1.5">
+                    <p className="truncate text-sm font-medium" title={displayName}>
+                      {displayName}
+                    </p>
+                    {displayEmail && (
+                      <p className="truncate text-xs text-muted-foreground" title={displayEmail}>
+                        {displayEmail}
+                      </p>
+                    )}
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
                     <Link href="/user/profile">
                       <User className="mr-2 h-4 w-4" />
                       个人中心
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/user/posts">
-                      <BookOpen className="mr-2 h-4 w-4" />
-                      我的帖子
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
@@ -181,22 +172,22 @@ export function Navbar() {
                 {user && (
                   <div className="mb-2 flex items-center gap-3 border-b border-border px-1 pb-3">
                     <Avatar className="h-9 w-9">
-                      <AvatarImage src={avatarSrc} alt={user.name ?? ""} />
-                      <AvatarFallback>{user.name?.charAt(0) || "U"}</AvatarFallback>
+                      <AvatarImage src={avatarSrc} alt={displayName} />
+                      <AvatarFallback>{displayName.charAt(0)}</AvatarFallback>
                     </Avatar>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{user.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                      <p className="truncate text-sm font-medium" title={displayName}>
+                        {displayName}
+                      </p>
+                      {displayEmail && (
+                        <p className="truncate text-xs text-muted-foreground" title={displayEmail}>
+                          {displayEmail}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
 
-                <SheetClose asChild>
-                  <Link href="/search" className={drawerRow}>
-                    <Search className="h-4 w-4" />
-                    搜索
-                  </Link>
-                </SheetClose>
                 <SheetClose asChild>
                   <Link href="/knowledge" className={drawerRow}>
                     <HelpCircle className="h-4 w-4" />
@@ -207,21 +198,9 @@ export function Navbar() {
                 {user ? (
                   <>
                     <SheetClose asChild>
-                      <Link href="/forum/new" className={drawerRow}>
-                        <PenSquare className="h-4 w-4" />
-                        发帖
-                      </Link>
-                    </SheetClose>
-                    <SheetClose asChild>
                       <Link href="/user/profile" className={drawerRow}>
                         <User className="h-4 w-4" />
                         个人中心
-                      </Link>
-                    </SheetClose>
-                    <SheetClose asChild>
-                      <Link href="/user/posts" className={drawerRow}>
-                        <BookOpen className="h-4 w-4" />
-                        我的帖子
                       </Link>
                     </SheetClose>
                     <SheetClose asChild>
@@ -291,7 +270,7 @@ export function Navbar() {
                     </SheetClose>
                     <SheetClose asChild>
                       <Link href="/register" className={drawerRow}>
-                        <PenSquare className="h-4 w-4" />
+                        <User className="h-4 w-4" />
                         注册
                       </Link>
                     </SheetClose>
