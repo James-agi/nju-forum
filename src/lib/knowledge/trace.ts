@@ -1,5 +1,23 @@
 export interface KnowledgeTrace {
   normalizedQuestion: string;
+  termExtraction?: {
+    terms: string[];
+    sources: Array<{
+      term: string;
+      source: "SPEC" | "TOKENIZER" | "ALIAS";
+      detail?: string;
+    }>;
+    aliases: Array<{
+      triggers: string[];
+      matchedTriggers: string[];
+      targets: string[];
+      status: "APPLIED" | "REJECTED";
+      reason?: "MISSING_CONTEXT" | "BLOCKED";
+      requireAny?: string[];
+      blockAny?: string[];
+    }>;
+    durationMs: number;
+  };
   scope: {
     inScope: boolean;
     code?: string;
@@ -11,13 +29,26 @@ export interface KnowledgeTrace {
     durationMs: number;
   };
   retrieval: {
-    candidates: Array<{ id: string; score: number; terms: string[] }>;
+    candidates: Array<{
+      id: string;
+      summary?: string;
+      score: number;
+      terms: string[];
+      verificationStatus?: "VERIFIED" | "UNVERIFIED" | "NEEDS_REVIEW";
+    }>;
     durationMs: number;
   };
   evidence: {
     sufficient: boolean;
     reason?: string;
     cardsCount: number;
+    selectedCards?: Array<{
+      id: string;
+      summary: string;
+      score: number;
+      terms: string[];
+      verificationStatus: "VERIFIED" | "UNVERIFIED" | "NEEDS_REVIEW";
+    }>;
   };
   answer: {
     mode?: "LLM" | "FALLBACK";
@@ -44,6 +75,10 @@ export class TraceBuilder {
 
   setScope(data: KnowledgeTrace["scope"]) {
     this.trace.scope = data;
+  }
+
+  setTermExtraction(data: NonNullable<KnowledgeTrace["termExtraction"]>) {
+    this.trace.termExtraction = data;
   }
 
   setExpansion(data: KnowledgeTrace["expansion"]) {

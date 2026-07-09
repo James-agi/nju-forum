@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractRetrievalTerms } from "../term-extraction";
+import { analyzeRetrievalTerms, extractRetrievalTerms } from "../term-extraction";
 
 describe("extractRetrievalTerms", () => {
   it("extracts known SPEC terms from question", async () => {
@@ -75,6 +75,16 @@ describe("extractRetrievalTerms", () => {
     expect(terms).toContain("教务");
   });
 
+  it("expands colloquial failed-course wording", async () => {
+    const terms = await extractRetrievalTerms("我挂科了，我该怎么办？");
+    expect(terms).toContain("挂科");
+    expect(terms).toContain("补考");
+    expect(terms).toContain("重修");
+    expect(terms).toContain("学业预警");
+    expect(terms).not.toContain("转专业");
+    expect(terms).not.toContain("大二转");
+  });
+
   it("expands shopping-service wording to campus store terms", async () => {
     const terms = await extractRetrievalTerms("学校里哪里能买点日用品");
     expect(terms).toContain("教超");
@@ -82,6 +92,46 @@ describe("extractRetrievalTerms", () => {
     expect(terms).toContain("便利店");
     expect(terms).toContain("商铺");
     expect(terms).toContain("日用品");
+  });
+
+  it("does not expand broad daily wording into unrelated domains", async () => {
+    await expect(extractRetrievalTerms("社团怎么选")).resolves.not.toContain("选课");
+    await expect(extractRetrievalTerms("宿舍怎么选")).resolves.not.toContain("选课");
+    await expect(extractRetrievalTerms("怎么交朋友")).resolves.not.toContain("缴费");
+    await expect(extractRetrievalTerms("我的书丢了怎么办")).resolves.not.toContain("补办");
+    await expect(extractRetrievalTerms("手机丢了怎么办")).resolves.not.toContain("挂失");
+    await expect(extractRetrievalTerms("考试失败后怎么办")).resolves.not.toContain("转专业");
+  });
+
+  it("keeps contextual short aliases when their domain is explicit", async () => {
+    await expect(extractRetrievalTerms("选课怎么选")).resolves.toContain("选课");
+    await expect(extractRetrievalTerms("学费怎么交")).resolves.toContain("缴费");
+    await expect(extractRetrievalTerms("饭卡丢了怎么办")).resolves.toContain("补办");
+    await expect(extractRetrievalTerms("转专业失败后怎么办")).resolves.toContain("转专业");
+    await expect(extractRetrievalTerms("考试前发烧了怎么办")).resolves.toContain("缓考");
+  });
+
+  it("explains applied and rejected aliases", async () => {
+    const failedCourse = await analyzeRetrievalTerms("我挂科了，我该怎么办？");
+    expect(failedCourse.terms).toContain("补考");
+    expect(failedCourse.aliases).toContainEqual(
+      expect.objectContaining({
+        matchedTriggers: ["挂科"],
+        targets: ["挂科", "补考", "重修", "成绩", "学业预警"],
+        status: "APPLIED",
+      }),
+    );
+
+    const transferPollution = await analyzeRetrievalTerms("考试失败后怎么办");
+    expect(transferPollution.terms).not.toContain("转专业");
+    expect(transferPollution.aliases).toContainEqual(
+      expect.objectContaining({
+        matchedTriggers: ["失败后"],
+        targets: ["转专业", "转专业失败", "转专业机会", "限制", "大二", "大二转"],
+        status: "REJECTED",
+        reason: "MISSING_CONTEXT",
+      }),
+    );
   });
 
   it("limits output to 15 terms", async () => {

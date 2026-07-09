@@ -14,6 +14,8 @@ import {
   VERIFICATION_STATUS_LABELS,
   type AskResponse,
   type CitationDTO,
+  type KnowledgeTrace,
+  type ResultExplanation,
 } from "@/lib/knowledge/types";
 
 type GroupedCitation = Omit<CitationDTO, "claimText"> & { claimTexts: string[] };
@@ -219,6 +221,9 @@ export function QuestionBox() {
           </CardContent>
         </Card>
       )}
+
+      {answer?.explanation && <ResultExplanationPanel explanation={answer.explanation} />}
+      {answer?.trace && <DebugTracePanel trace={answer.trace} />}
     </div>
   );
 }
@@ -255,6 +260,152 @@ function ModeButton({
         <span className="block truncate text-xs">{subtitle}</span>
       </span>
     </button>
+  );
+}
+
+function ResultExplanationPanel({ explanation }: { explanation: ResultExplanation }) {
+  return (
+    <details className="rounded-md border bg-background">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+        为什么是这些结果
+      </summary>
+      <div className="space-y-4 border-t p-4 text-sm">
+        <DebugSection title="系统理解到的关键词">
+          <p className="break-words text-muted-foreground">
+            {explanation.keywords.join(" / ") || "无"}
+          </p>
+        </DebugSection>
+
+        {explanation.appliedAliases.length > 0 && (
+          <DebugSection title="相关理解">
+            <div className="space-y-2">
+              {explanation.appliedAliases.map((alias, index) => (
+                <p key={index} className="break-words text-muted-foreground">
+                  {alias.triggers.join(" / ")} → {alias.targets.join(" / ")}
+                </p>
+              ))}
+            </div>
+          </DebugSection>
+        )}
+
+        <DebugSection title="选卡依据">
+          <p className="text-muted-foreground">
+            {explanation.evidence.sufficient
+              ? `已有 ${explanation.evidence.cardCount} 张知识卡片可作为依据。`
+              : "现有知识卡片还不足以直接回答这个问题。"}
+          </p>
+          {explanation.evidence.selectedCards.length > 0 && (
+            <div className="mt-2 space-y-2">
+              {explanation.evidence.selectedCards.map((card, index) => (
+                <div key={`${card.summary}-${index}`} className="rounded border bg-muted/20 p-2">
+                  <p className="break-words font-medium">{card.summary}</p>
+                  <p className="break-words text-xs text-muted-foreground">
+                    命中：{card.matchedTerms.join(" / ") || "无命中词"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </DebugSection>
+      </div>
+    </details>
+  );
+}
+
+function DebugTracePanel({ trace }: { trace: KnowledgeTrace }) {
+  const aliases = trace.termExtraction?.aliases || [];
+  const candidates = trace.retrieval?.candidates || [];
+  const selectedCards = trace.evidence?.selectedCards || [];
+
+  return (
+    <details className="rounded-md border bg-muted/20">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-medium">
+        调试详情
+      </summary>
+      <div className="space-y-4 border-t p-4 text-sm">
+        <DebugSection title="抽词">
+          <p className="break-words text-muted-foreground">
+            {(trace.termExtraction?.terms || []).join(" / ") || "无"}
+          </p>
+        </DebugSection>
+
+        <DebugSection title="别名决策">
+          {aliases.length > 0 ? (
+            <div className="space-y-2">
+              {aliases.map((alias, index) => (
+                <div key={index} className="rounded border bg-background p-2">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <Badge variant={alias.status === "APPLIED" ? "default" : "secondary"}>
+                      {alias.status === "APPLIED" ? "已应用" : "已拒绝"}
+                    </Badge>
+                    {alias.reason && <span className="text-xs text-muted-foreground">{alias.reason}</span>}
+                  </div>
+                  <p className="break-words text-xs text-muted-foreground">
+                    触发：{alias.matchedTriggers.join(" / ")}
+                  </p>
+                  <p className="break-words text-xs text-muted-foreground">
+                    目标：{alias.targets.join(" / ")}
+                  </p>
+                  {alias.requireAny && (
+                    <p className="break-words text-xs text-muted-foreground">
+                      需要上下文：{alias.requireAny.join(" / ")}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">无别名触发</p>
+          )}
+        </DebugSection>
+
+        <DebugSection title="候选卡">
+          {candidates.length > 0 ? (
+            <ol className="space-y-2">
+              {candidates.map((candidate) => (
+                <li key={candidate.id} className="rounded border bg-background p-2">
+                  <p className="break-words font-medium">{candidate.summary || candidate.id}</p>
+                  <p className="break-words text-xs text-muted-foreground">
+                    score {candidate.score} · {candidate.terms.join(" / ") || "无命中词"}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="text-muted-foreground">无候选卡</p>
+          )}
+        </DebugSection>
+
+        <DebugSection title="证据">
+          <p className="text-muted-foreground">
+            {trace.evidence?.sufficient ? "通过" : "未通过"}
+            {trace.evidence?.reason ? ` · ${trace.evidence.reason}` : ""}
+            {typeof trace.evidence?.cardsCount === "number" ? ` · ${trace.evidence.cardsCount} 张` : ""}
+          </p>
+          {selectedCards.length > 0 && (
+            <ol className="mt-2 space-y-2">
+              {selectedCards.map((card) => (
+                <li key={card.id} className="rounded border bg-background p-2">
+                  <p className="break-words font-medium">{card.summary}</p>
+                  <p className="break-words text-xs text-muted-foreground">
+                    score {card.score} · {card.terms.join(" / ") || "无命中词"}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          )}
+        </DebugSection>
+      </div>
+    </details>
+  );
+}
+
+function DebugSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="text-xs font-semibold text-muted-foreground">{title}</h2>
+      {children}
+    </section>
   );
 }
 

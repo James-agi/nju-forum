@@ -9,8 +9,12 @@
 # testing
 /coverage
 
+# runtime uploads and feedback materials
+/storage/
+
 # next.js
 /.next/
+/.next-dev/
 /out/
 
 # production

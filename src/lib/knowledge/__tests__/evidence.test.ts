@@ -120,6 +120,25 @@ describe("evaluateEvidence", () => {
     expect(result.reason).toBe("PREFILTER_PASSED");
   });
 
+  it("accepts a short failed-course question with a verified direct title anchor", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        score: 8,
+        matchedTerms: ["挂科"],
+        queryTerms: ["挂科"],
+        originalQueryTerms: ["挂科"],
+        cardOverrides: {
+          summary: "挂科了怎么办？补考和重修怎么选？",
+          body: "挂科后可以关注补考和重修，两者在成绩记录和后续影响上不同。",
+          domainTag: "课程学业",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.reason).toBe("PREFILTER_PASSED");
+  });
+
   it("accepts a low-scoring direct title match for a concrete campus service", () => {
     const results = [
       makeResult({

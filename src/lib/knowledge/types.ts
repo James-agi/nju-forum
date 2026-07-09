@@ -170,26 +170,53 @@ export interface ConversationInfo {
   turnIndex?: number;
 }
 
+export type { KnowledgeTrace } from "@/lib/knowledge/trace";
+
+export interface DebugTraceInfo {
+  trace?: import("@/lib/knowledge/trace").KnowledgeTrace;
+}
+
+export interface ResultExplanation {
+  keywords: string[];
+  appliedAliases: Array<{
+    triggers: string[];
+    targets: string[];
+  }>;
+  evidence: {
+    sufficient: boolean;
+    cardCount: number;
+    selectedCards: Array<{
+      summary: string;
+      matchedTerms: string[];
+      verificationStatus: VerificationStatusValue;
+    }>;
+  };
+}
+
+export interface ResultExplanationInfo {
+  explanation?: ResultExplanation;
+}
+
 export type AskResponse =
-  | (ConversationInfo & {
+  | (ConversationInfo & DebugTraceInfo & ResultExplanationInfo & {
       status: "ANSWERED";
       questionId: string;
       answer: string;
       citations: CitationDTO[];
     })
-  | (ConversationInfo & {
+  | (ConversationInfo & DebugTraceInfo & ResultExplanationInfo & {
       status: "CARDS_FOUND";
       questionId: string;
       cards: DirectCardDTO[];
       message: string;
     })
-  | (ConversationInfo & {
+  | (ConversationInfo & DebugTraceInfo & ResultExplanationInfo & {
       status: "GAP_RECORDED";
       questionId: string;
       gapId: string;
       message: string;
     })
-  | (ConversationInfo & {
+  | (ConversationInfo & DebugTraceInfo & ResultExplanationInfo & {
       status: "OUT_OF_SCOPE";
       questionId: string;
       message: string;

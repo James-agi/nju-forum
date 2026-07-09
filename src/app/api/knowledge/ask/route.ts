@@ -12,7 +12,8 @@ import {
   formatValidationError,
   normalizeQuestionText,
 } from "@/lib/knowledge/validation";
-import type { AskResponse, CitationDTO, DirectCardDTO } from "@/lib/knowledge/types";
+import { analyzeRetrievalTerms } from "@/lib/knowledge/term-extraction";
+import type { AskResponse, CitationDTO, DirectCardDTO, ResultExplanation } from "@/lib/knowledge/types";
 import type { RetrievalResult } from "@/lib/knowledge/types-internal";
 import { TraceBuilder } from "@/lib/knowledge/trace";
 import { getOrCreateConversation, getConversationHistory } from "@/lib/knowledge/conversation";
@@ -41,6 +42,50 @@ function toDirectCardDTO(result: RetrievalResult): DirectCardDTO {
     score: result.score,
     matchedTerms: result.matchedTerms,
   };
+}
+
+function withDebugTrace<T extends AskResponse>(
+  response: T,
+  trace: TraceBuilder,
+  role: string,
+): T {
+  if (role !== "ADMIN") return response;
+  return { ...response, trace: trace.build() };
+}
+
+function buildResultExplanation(trace: TraceBuilder): ResultExplanation {
+  const current = trace.build();
+  const selectedCards = current.evidence?.selectedCards || [];
+  return {
+    keywords: current.termExtraction?.terms || [],
+    appliedAliases: (current.termExtraction?.aliases || [])
+      .filter((alias) => alias.status === "APPLIED")
+      .map((alias) => ({
+        triggers: alias.matchedTriggers,
+        targets: alias.targets,
+      })),
+    evidence: {
+      sufficient: Boolean(current.evidence?.sufficient),
+      cardCount: current.evidence?.cardsCount || 0,
+      selectedCards: selectedCards.map((card) => ({
+        summary: card.summary,
+        matchedTerms: card.terms,
+        verificationStatus: card.verificationStatus,
+      })),
+    },
+  };
+}
+
+function withExplanation<T extends AskResponse>(response: T, trace: TraceBuilder): T {
+  return { ...response, explanation: buildResultExplanation(trace) };
+}
+
+function withResponseDetails<T extends AskResponse>(
+  response: T,
+  trace: TraceBuilder,
+  role: string,
+): T {
+  return withDebugTrace(withExplanation(response, trace), trace, role);
 }
 
 function getAskBusyPayload(reason: AskConcurrencyBusyReason) {
@@ -140,12 +185,12 @@ export async function POST(req: Request) {
         message: scope.message || "这个请求不属于 P0 的 NJU 信息沉淀范围。",
       };
 
-      return NextResponse.json(response);
+      return NextResponse.json(withResponseDetails(response, trace, authz.user.role));
     }
 
     // 单轮问答走缓存
     const cacheKey = normalizedQuestion;
-    if (responseMode === "think" && (!conversationId || turnIndex === 1)) {
+    if (authz.user.role !== "ADMIN" && responseMode === "think" && (!conversationId || turnIndex === 1)) {
       const cached = answerCache.get(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached) as AskResponse & { status: "ANSWERED" };
@@ -168,10 +213,23 @@ export async function POST(req: Request) {
       trace.setExpansion({ terms: [], durationMs: 0 });
     }
 
+    trace.mark("termExtraction");
+    const termTrace = await analyzeRetrievalTerms(questionText);
+    trace.setTermExtraction({
+      ...termTrace,
+      durationMs: trace.elapsedMs("termExtraction"),
+    });
+
     trace.mark("retrieval");
     const retrieval = await retrieveHybrid(questionText, 5, expandedTerms);
     trace.setRetrieval({
-      candidates: retrieval.slice(0, 5).map((r) => ({ id: r.card.id, score: r.score, terms: r.matchedTerms })),
+      candidates: retrieval.slice(0, 5).map((r) => ({
+        id: r.card.id,
+        summary: r.card.summary,
+        score: r.score,
+        terms: r.matchedTerms,
+        verificationStatus: r.card.verificationStatus,
+      })),
       durationMs: trace.elapsedMs("retrieval"),
     });
 
@@ -181,6 +239,13 @@ export async function POST(req: Request) {
       sufficient: evidence.sufficient,
       reason: evidence.reason,
       cardsCount: evidence.cards.length,
+      selectedCards: evidence.cards.map((r) => ({
+        id: r.card.id,
+        summary: r.card.summary,
+        score: r.score,
+        terms: r.matchedTerms,
+        verificationStatus: r.card.verificationStatus,
+      })),
     });
 
     if (responseMode === "cards" && evidence.sufficient) {
@@ -203,7 +268,7 @@ export async function POST(req: Request) {
         message: "找到这些可引用卡片，先把原始材料浮上来给你看。",
       };
 
-      return NextResponse.json(response);
+      return NextResponse.json(withResponseDetails(response, trace, authz.user.role));
     }
 
     if (!evidence.sufficient) {
@@ -230,7 +295,7 @@ export async function POST(req: Request) {
             message: "这个问题不在 NJU 知识库收录范围内。",
           };
 
-          return NextResponse.json(response);
+          return NextResponse.json(withResponseDetails(response, trace, authz.user.role));
         }
       }
 
@@ -294,7 +359,7 @@ export async function POST(req: Request) {
         message: GAP_MESSAGE,
       };
 
-      return NextResponse.json(response);
+      return NextResponse.json(withResponseDetails(response, trace, authz.user.role));
     }
 
     trace.mark("answer");
@@ -373,12 +438,13 @@ export async function POST(req: Request) {
       answer: answerText,
       citations: citationResponse,
     };
+    const responseWithDetails = withResponseDetails(response, trace, authz.user.role);
 
-    if (responseMode === "think" && (!conversationId || turnIndex === 1)) {
-      answerCache.set(cacheKey, JSON.stringify(response));
+    if (authz.user.role !== "ADMIN" && responseMode === "think" && (!conversationId || turnIndex === 1)) {
+      answerCache.set(cacheKey, JSON.stringify(responseWithDetails));
     }
 
-    return NextResponse.json(response);
+    return NextResponse.json(responseWithDetails);
     } finally {
       askSlot.release();
     }

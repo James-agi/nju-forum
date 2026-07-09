@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireKnowledgeAuthor } from "@/lib/knowledge/authz";
+import { analyzeRetrievalTerms } from "@/lib/knowledge/term-extraction";
+import { expandQueryTerms } from "@/lib/knowledge/query-expansion";
+import { evaluateEvidence, retrieveHybrid } from "@/lib/knowledge/retrieval";
+import { classifyP0Scope } from "@/lib/knowledge/scope";
+import { normalizeQuestionText } from "@/lib/knowledge/validation";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +15,51 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const questionId = url.searchParams.get("questionId");
+  const liveQuestion = url.searchParams.get("question");
+  const mode = url.searchParams.get("mode") === "think" ? "think" : "cards";
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 20, 1), 100);
   const page = Math.max(Number(url.searchParams.get("page")) || 1, 1);
+
+  if (liveQuestion) {
+    const normalizedQuestion = normalizeQuestionText(liveQuestion);
+    const scope = classifyP0Scope(liveQuestion);
+    const termExtraction = await analyzeRetrievalTerms(liveQuestion);
+    const expandedTerms = mode === "think" ? await expandQueryTerms(liveQuestion) : [];
+    const retrieval = scope.inScope ? await retrieveHybrid(liveQuestion, 10, expandedTerms) : [];
+    const evidence = evaluateEvidence(retrieval);
+
+    return NextResponse.json({
+      debug: true,
+      live: true,
+      mode,
+      question: liveQuestion,
+      normalizedQuestion,
+      scope,
+      termExtraction,
+      expansion: { terms: expandedTerms },
+      retrieval: retrieval.map((r) => ({
+        id: r.card.id,
+        summary: r.card.summary,
+        score: r.score,
+        matchedTerms: r.matchedTerms,
+        queryTerms: r.queryTerms,
+        originalQueryTerms: r.originalQueryTerms,
+        verificationStatus: r.card.verificationStatus,
+        domainTag: r.card.domainTag,
+      })),
+      evidence: {
+        sufficient: evidence.sufficient,
+        reason: evidence.reason,
+        cards: evidence.cards.map((r) => ({
+          id: r.card.id,
+          summary: r.card.summary,
+          score: r.score,
+          matchedTerms: r.matchedTerms,
+          evidenceChunks: r.evidenceChunks,
+        })),
+      },
+    });
+  }
 
   if (questionId) {
     const question = await db.knowledgeQuestion.findUnique({
