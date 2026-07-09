@@ -1,6 +1,12 @@
 import type { RetrievalResult } from "@/lib/knowledge/retrieval";
-import { chatCompletion, LlmError } from "@/lib/knowledge/llm-client";
-import { LLM_ANSWER_TIMEOUT, LLM_MAX_TOKENS, LLM_TEMPERATURE } from "@/lib/knowledge/config";
+import { answerCompletion, LlmError } from "@/lib/knowledge/llm-client";
+import { LLM_ANSWER_TIMEOUT_MS, LLM_MAX_TOKENS, LLM_TEMPERATURE } from "@/lib/knowledge/config";
+import type {
+  StructuredAnswer,
+  StructuredAnswerBlock,
+  StructuredAnswerBlockRole,
+  StructuredAnswerShape,
+} from "@/lib/knowledge/types";
 
 export interface AnswerCitationDraft {
   cardId: string;
@@ -19,6 +25,7 @@ export type FallbackReason =
 
 export interface CardBoundedAnswer {
   answerText: string;
+  structuredAnswer?: StructuredAnswer;
   citations: AnswerCitationDraft[];
   answerMode: AnswerMode;
   fallbackReason?: FallbackReason;
@@ -27,6 +34,7 @@ export interface CardBoundedAnswer {
 interface AnswerValidationResult {
   ok: boolean;
   answerText: string;
+  structuredAnswer?: StructuredAnswer;
   reason?: FallbackReason;
 }
 
@@ -40,7 +48,11 @@ const SYSTEM_PROMPT =
   "如果用户问题包含多个子问题、多个地点、多个方式或多个对象，而证据只覆盖其中一部分，必须明确说明哪些部分有证据、哪些部分没有证据，不能把未覆盖部分静默省略。" +
   "如果不同卡片存在限制或例外，必须优先保留限制条件，不能给出与限制相反的确定建议。" +
   "如果问题询问实时状态、当天情况、年度变化、具体余量或精确数值，而卡片只提供一般规则/路径，只能回答一般信息和查询路径，并明确说明不能确认实时或个人化结果。" +
-  "输出严格 JSON：{\"answer\":\"...\",\"citations\":[{\"cardId\":\"...\",\"claimText\":\"...\"}]}。" +
+  "回答要面向学生阅读：先给一句短结论，再按问题类型组织短块；每条尽量短，不要把引用卡片标题、来源说明或长摘录硬塞进正文。" +
+  "你需要选择一个 answer shape：direct、procedure、comparison、policy、partial、troubleshoot。" +
+  "同时输出 structuredAnswer，格式为 {\"shape\":\"...\",\"headline\":\"一句话结论\",\"blocks\":[{\"role\":\"answer|step|requirement|option|risk|action|gap|note\",\"title\":\"...\",\"items\":[\"...\"]}]}。" +
+  "blocks 可以按问题需要灵活选择，但每个 block 最多 4 条，每条不超过 120 字。如果只能部分回答，必须包含 role 为 gap 的块。" +
+  "输出严格 JSON：{\"answer\":\"...\",\"structuredAnswer\":{...},\"citations\":[{\"cardId\":\"...\",\"claimText\":\"...\"}]}。" +
   "每个实质结论必须有 citation。" +
   "如果用户问题依赖前文（如代词指代、省略主语），结合 conversationHistory 理解完整意图。";
 
@@ -70,6 +82,103 @@ const GROUNDED_TERM_GROUPS = [
   ["化生", "化学", "生物"],
   ["校车", "班车"],
 ];
+const STRUCTURED_ANSWER_SHAPES = [
+  "direct",
+  "procedure",
+  "comparison",
+  "policy",
+  "partial",
+  "troubleshoot",
+] as const satisfies readonly StructuredAnswerShape[];
+const STRUCTURED_ANSWER_BLOCK_ROLES = [
+  "answer",
+  "step",
+  "requirement",
+  "option",
+  "risk",
+  "action",
+  "gap",
+  "note",
+] as const satisfies readonly StructuredAnswerBlockRole[];
+
+function isStructuredAnswerShape(value: string): value is StructuredAnswerShape {
+  return STRUCTURED_ANSWER_SHAPES.includes(value as StructuredAnswerShape);
+}
+
+function isStructuredAnswerBlockRole(value: string): value is StructuredAnswerBlockRole {
+  return STRUCTURED_ANSWER_BLOCK_ROLES.includes(value as StructuredAnswerBlockRole);
+}
+
+function trimStructuredText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return "";
+  const compact = value.replace(/\s+/g, " ").trim();
+  if (compact.length <= maxLength) return compact;
+  return `${compact.slice(0, maxLength)}...`;
+}
+
+function sanitizeStructuredAnswer(value: unknown): StructuredAnswer | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = value as Record<string, unknown>;
+  const shape = typeof raw.shape === "string" && isStructuredAnswerShape(raw.shape)
+    ? raw.shape
+    : "direct";
+  const headline = trimStructuredText(raw.headline, 120);
+  if (!headline || !Array.isArray(raw.blocks)) return undefined;
+
+  const blocks = raw.blocks
+    .slice(0, 6)
+    .map((block): StructuredAnswerBlock | null => {
+      if (!block || typeof block !== "object") return null;
+      const rawBlock = block as Record<string, unknown>;
+      const role = typeof rawBlock.role === "string" && isStructuredAnswerBlockRole(rawBlock.role)
+        ? rawBlock.role
+        : "note";
+      const title = trimStructuredText(rawBlock.title, 32);
+      if (!title || !Array.isArray(rawBlock.items)) return null;
+      const items = rawBlock.items
+        .map((item) => trimStructuredText(item, 160))
+        .filter(Boolean)
+        .slice(0, 4);
+      if (items.length === 0) return null;
+      return { role, title, items };
+    })
+    .filter((block): block is StructuredAnswerBlock => Boolean(block));
+
+  if (blocks.length === 0) return undefined;
+  return { shape, headline, blocks };
+}
+
+function structuredAnswerText(structuredAnswer: StructuredAnswer | undefined) {
+  if (!structuredAnswer) return "";
+  return [
+    structuredAnswer.headline,
+    ...structuredAnswer.blocks.flatMap((block) => [block.title, ...block.items]),
+  ].join("\n");
+}
+
+function appendNoteBlock(structuredAnswer: StructuredAnswer | undefined, title: string, text: string) {
+  const item = trimStructuredText(text, 180);
+  if (!structuredAnswer || !item) return structuredAnswer;
+  return {
+    ...structuredAnswer,
+    blocks: [
+      ...structuredAnswer.blocks,
+      {
+        role: "note",
+        title,
+        items: [item],
+      } satisfies StructuredAnswerBlock,
+    ].slice(0, 6),
+  };
+}
+
+function answerShapeForQuestion(question: string): StructuredAnswerShape {
+  if (/流程|步骤|申请|办理|怎么弄|怎么做|如何/.test(question)) return "procedure";
+  if (/区别|对比|比较|还是|哪个|哪种/.test(question)) return "comparison";
+  if (/政策|规定|条件|要求|能不能|是否|可以吗/.test(question)) return "policy";
+  if (/故障|失败|出错|打不开|没电|坏了/.test(question)) return "troubleshoot";
+  return "direct";
+}
 
 function needsLimitedAnswerNote(question: string) {
   return LIMITED_ANSWER_PATTERNS.some((pattern) => pattern.test(question));
@@ -154,12 +263,23 @@ function validateGroundedAnswer(
   answer: string,
   citations: AnswerCitationDraft[],
   evidence: RetrievalResult[],
+  structuredAnswer?: StructuredAnswer,
 ): AnswerValidationResult {
+  const originalAnswer = answer.trim();
   const answerText = finalizeAnswerText(question, answer, evidence);
+  let safeStructuredAnswer = structuredAnswer;
+  if (safeStructuredAnswer && answerText !== originalAnswer && answerText.startsWith(originalAnswer)) {
+    safeStructuredAnswer = appendNoteBlock(
+      safeStructuredAnswer,
+      "需要注意",
+      answerText.slice(originalAnswer.length).trim(),
+    );
+  }
+  const textToValidate = `${answerText}\n${structuredAnswerText(safeStructuredAnswer)}`;
   const supportedText = `${question}\n${evidenceText(evidence)}`;
 
   for (const group of GROUNDED_TERM_GROUPS) {
-    if (!hasAnyTerm(answerText, group)) continue;
+    if (!hasAnyTerm(textToValidate, group)) continue;
     if (hasAnyTerm(supportedText, group)) continue;
 
     return {
@@ -181,6 +301,7 @@ function validateGroundedAnswer(
   return {
     ok: true,
     answerText,
+    structuredAnswer: safeStructuredAnswer,
   };
 }
 
@@ -190,20 +311,60 @@ function trimForAnswer(text: string, maxLength = 320) {
   return `${compact.slice(0, maxLength)}...`;
 }
 
+function buildDeterministicStructuredAnswer(question: string, evidence: RetrievalResult[]): StructuredAnswer {
+  const answerItems = evidence.slice(0, 4).map((result) => {
+    const chunkText = result.evidenceChunks?.length
+      ? result.evidenceChunks.map((chunk) => trimForAnswer(chunk.text, 140)).join(" / ")
+      : trimForAnswer(result.card.body, 140);
+    return `${result.card.summary}：${chunkText}`;
+  });
+
+  return {
+    shape: answerShapeForQuestion(question),
+    headline: `针对「${question}」，当前只能根据已匹配到的知识卡片给出有限回答。`,
+    blocks: [
+      {
+        role: "answer",
+        title: "可以确认",
+        items: answerItems,
+      },
+      {
+        role: "note",
+        title: "需要注意",
+        items: ["以上内容只来自当前引用卡片；没有被卡片覆盖的细节，不能直接确认。"],
+      },
+    ],
+  };
+}
+
 function buildDeterministicAnswer(question: string, evidence: RetrievalResult[]): CardBoundedAnswer {
   const lines = evidence.map((result, index) => {
     const chunkText = result.evidenceChunks?.length
       ? result.evidenceChunks.map((chunk) => trimForAnswer(chunk.text, 220)).join(" / ")
       : trimForAnswer(result.card.body);
-    return `${index + 1}. ${result.card.summary}：${chunkText}`;
+    return `${index + 1}. **${result.card.summary}**：${chunkText}`;
   });
+  const baseAnswerText = [
+    `针对「${question}」，当前只能根据已匹配到的知识卡片给出有限回答。`,
+    "",
+    "### 可以确认",
+    lines.join("\n"),
+    "",
+    "### 需要注意",
+    "以上内容只来自当前引用卡片；没有被卡片覆盖的细节，不能直接确认。",
+  ].join("\n");
+  const answerText = finalizeAnswerText(question, baseAnswerText, evidence);
+  const structuredAnswer = answerText.startsWith(baseAnswerText) && answerText !== baseAnswerText
+    ? appendNoteBlock(
+        buildDeterministicStructuredAnswer(question, evidence),
+        "需要注意",
+        answerText.slice(baseAnswerText.length).trim(),
+      )
+    : buildDeterministicStructuredAnswer(question, evidence);
 
   return {
-    answerText: finalizeAnswerText(
-      question,
-      `根据知识库中可引用的卡片，针对「${question}」目前只能确认：\n${lines.join("\n")}`,
-      evidence,
-    ),
+    answerText,
+    structuredAnswer,
     citations: evidence.map((result) => ({
       cardId: result.card.id,
       claimText: result.card.summary,
@@ -251,7 +412,7 @@ export async function buildCardBoundedAnswer(
       userContent.conversationHistory = conversationHistory;
     }
 
-    llmContent = await chatCompletion({
+    llmContent = await answerCompletion({
       messages: [
         { role: "system", content: SYSTEM_PROMPT },
         {
@@ -261,7 +422,7 @@ export async function buildCardBoundedAnswer(
       ],
       maxTokens: LLM_MAX_TOKENS,
       temperature: LLM_TEMPERATURE,
-      timeoutMs: LLM_ANSWER_TIMEOUT,
+      timeoutMs: LLM_ANSWER_TIMEOUT_MS,
     });
   } catch (err) {
     if (err instanceof LlmError) {
@@ -278,7 +439,7 @@ export async function buildCardBoundedAnswer(
     return fallback;
   }
 
-  let parsed: { answer?: unknown; citations?: unknown };
+  let parsed: { answer?: unknown; structuredAnswer?: unknown; citations?: unknown };
   try {
     parsed = JSON.parse(json);
   } catch {
@@ -307,7 +468,8 @@ export async function buildCardBoundedAnswer(
     return fallback;
   }
 
-  const validation = validateGroundedAnswer(question, parsed.answer.trim(), citations, evidence);
+  const structuredAnswer = sanitizeStructuredAnswer(parsed.structuredAnswer);
+  const validation = validateGroundedAnswer(question, parsed.answer.trim(), citations, evidence, structuredAnswer);
   if (!validation.ok) {
     fallback.fallbackReason = validation.reason;
     return fallback;
@@ -315,6 +477,7 @@ export async function buildCardBoundedAnswer(
 
   return {
     answerText: validation.answerText,
+    structuredAnswer: validation.structuredAnswer,
     citations,
     answerMode: "LLM",
   };

@@ -83,6 +83,143 @@ export interface ScopeClassification {
   message?: string;
 }
 
+export interface ClarificationDecision {
+  needsClarification: boolean;
+  message: string;
+  suggestions: string[];
+}
+
+interface BarePromptRule {
+  terms: string[];
+  message: string;
+  suggestions: (term: string) => string[];
+}
+
+const BARE_PROMPT_RULES: BarePromptRule[] = [
+  {
+    terms: [
+      "仙林",
+      "仙林校区",
+      "鼓楼",
+      "鼓楼校区",
+      "浦口",
+      "浦口校区",
+      "苏州",
+      "苏州校区",
+      "南大",
+      "南京大学",
+      "学校",
+      "校区",
+    ],
+    message: "这个问题范围太宽了。请补充你想问的具体方面，比如生活服务、食堂、宿舍、交通、办事或课程信息。",
+    suggestions: (term) => [
+      `${term}食堂有什么？`,
+      `${term}宿舍怎么样？`,
+      `${term}怎么通勤？`,
+      `${term}哪里可以理发或洗衣？`,
+    ],
+  },
+  {
+    terms: [
+      "人工智能",
+      "人工智能专业",
+      "人工智能学院",
+      "计算机",
+      "计算机类",
+      "计算机科学与技术",
+      "软件工程",
+      "电子信息",
+      "天文",
+      "天文学",
+      "数学",
+      "物理",
+      "化学",
+      "生物",
+      "地科",
+      "地科院",
+      "商学院",
+      "商院",
+      "法学院",
+      "法学",
+      "新传",
+      "新闻传播",
+      "信管",
+      "医学院",
+      "匡院",
+      "匡亚明学院",
+    ],
+    message: "你输入的是专业或院系名，但还没说明想问哪方面。请补充是校区归属、转入限制、课程体验、培养方向还是生活安排。",
+    suggestions: (term) => [
+      `${term}在哪个校区？`,
+      `${term}转专业有什么限制？`,
+      `${term}课程体验怎么样？`,
+      `${term}培养方向是什么？`,
+    ],
+  },
+  {
+    terms: [
+      "转专业",
+      "保研",
+      "军训",
+      "宿舍",
+      "食堂",
+      "校园卡",
+      "一卡通",
+      "饭卡",
+      "挂科",
+      "补考",
+      "重修",
+      "选课",
+      "校医院",
+      "医保",
+      "校园网",
+      "图书馆",
+      "洗衣",
+      "理发",
+      "快递",
+      "外卖",
+      "打印",
+      "修车",
+      "通勤",
+      "校车",
+      "班车",
+      "大创",
+      "导师",
+      "科研",
+      "报到",
+      "体检",
+      "户口",
+      "档案",
+      "奖学金",
+      "助学金",
+      "学费",
+      "缴费",
+      "缓考",
+      "拔尖",
+      "分流",
+    ],
+    message: "你输入的是一个主题词。为了避免随机用某一张卡代表整个主题，请补充你具体想知道的问题方向。",
+    suggestions: (term) => [
+      `${term}有什么基本流程？`,
+      `${term}有哪些注意事项？`,
+      `${term}新生需要知道什么？`,
+      `${term}常见问题有哪些？`,
+    ],
+  },
+];
+
+export function classifyNeedsClarification(question: string): ClarificationDecision | null {
+  const normalized = normalizeQuestionText(question);
+  const rule = BARE_PROMPT_RULES.find((candidate) => candidate.terms.includes(normalized));
+  if (!rule) return null;
+
+  return {
+    needsClarification: true,
+    message: rule.message,
+    suggestions: rule.suggestions(normalized),
+  };
+}
+
 function hardOutMessage(label: string) {
   return `这个请求属于「${label}」，不在本知识库的稳定信息收录范围内。`;
 }

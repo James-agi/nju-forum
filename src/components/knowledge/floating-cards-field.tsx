@@ -7,11 +7,13 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { ChevronDown, ChevronUp, ExternalLink, Search } from "lucide-react";
+import Link from "next/link";
+import { BookOpen, ExternalLink, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { LinkifiedText, MarkdownText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
+import { LinkifiedText } from "@/components/knowledge/source-excerpt";
 import { UnsolvedButton } from "@/components/knowledge/unsolved-button";
+import { saveKnowledgeAskScrollPosition } from "@/lib/knowledge/ask-page-session";
 import {
   SOURCE_TYPE_LABELS,
   VERIFICATION_STATUS_LABELS,
@@ -90,19 +92,9 @@ export function FloatingCardsField({
   // 「伸手去读→定住」的三个来源
   const pointerRef = useRef(false);
   const focusRef = useRef(false);
-  const expandedCountRef = useRef(0);
   const holdRef = useRef(false);
   const syncHold = () => {
-    holdRef.current =
-      pointerRef.current || focusRef.current || expandedCountRef.current > 0;
-  };
-
-  const onExpandedChange = (expanded: boolean) => {
-    expandedCountRef.current = Math.max(
-      0,
-      expandedCountRef.current + (expanded ? 1 : -1)
-    );
-    syncHold();
+    holdRef.current = pointerRef.current || focusRef.current;
   };
 
   // 媒体查询：reduced-motion 或窄屏 → 静态降级；变化时热切换
@@ -420,7 +412,6 @@ export function FloatingCardsField({
                 card={card}
                 index={index}
                 floating
-                onExpandedChange={onExpandedChange}
               />
             ))}
           </div>
@@ -448,19 +439,9 @@ const DirectCardBubble = forwardRef<
     card: DirectCardDTO;
     index: number;
     floating: boolean;
-    onExpandedChange?: (expanded: boolean) => void;
   }
->(function DirectCardBubble({ card, index, floating, onExpandedChange }, ref) {
-  const [expanded, setExpanded] = useState(false);
+>(function DirectCardBubble({ card, index, floating }, ref) {
   const visibleTerms = card.matchedTerms.slice(0, 4);
-
-  const toggle = () => {
-    setExpanded((value) => {
-      const next = !value;
-      onExpandedChange?.(next);
-      return next;
-    });
-  };
 
   return (
     <article
@@ -497,9 +478,14 @@ const DirectCardBubble = forwardRef<
       )}
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={toggle}>
-          {expanded ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
-          {expanded ? "收起卡片" : "展开卡片"}
+        <Button asChild variant="outline" size="sm">
+          <Link
+            href={`/knowledge/cards/${card.cardId}`}
+            onClick={saveKnowledgeAskScrollPosition}
+          >
+            <BookOpen className="mr-2 h-4 w-4" />
+            查看卡片
+          </Link>
         </Button>
         {card.sourceUrl && (
           <Button asChild variant="ghost" size="sm">
@@ -510,21 +496,6 @@ const DirectCardBubble = forwardRef<
           </Button>
         )}
       </div>
-
-      {expanded && (
-        <div className="mt-3 space-y-3 border-t pt-3">
-          <MarkdownText
-            text={card.body}
-            className="rounded-md bg-muted/40 p-3 text-sm leading-6"
-          />
-          {card.sourceExcerpt && (
-            <SourceExcerptBlock sourceExcerpt={card.sourceExcerpt} />
-          )}
-          <p className="break-words text-sm text-muted-foreground">
-            <LinkifiedText text={card.sourceDescription} />
-          </p>
-        </div>
-      )}
     </article>
   );
 });

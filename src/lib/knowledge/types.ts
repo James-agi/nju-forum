@@ -139,6 +139,36 @@ export interface CitationDTO {
   claimText: string;
 }
 
+export type StructuredAnswerShape =
+  | "direct"
+  | "procedure"
+  | "comparison"
+  | "policy"
+  | "partial"
+  | "troubleshoot";
+
+export type StructuredAnswerBlockRole =
+  | "answer"
+  | "step"
+  | "requirement"
+  | "option"
+  | "risk"
+  | "action"
+  | "gap"
+  | "note";
+
+export interface StructuredAnswerBlock {
+  role: StructuredAnswerBlockRole;
+  title: string;
+  items: string[];
+}
+
+export interface StructuredAnswer {
+  shape: StructuredAnswerShape;
+  headline: string;
+  blocks: StructuredAnswerBlock[];
+}
+
 export interface DirectCardDTO {
   cardId: string;
   summary: string;
@@ -202,6 +232,9 @@ export type AskResponse =
       status: "ANSWERED";
       questionId: string;
       answer: string;
+      answerMode?: "LLM" | "FALLBACK";
+      fallbackReason?: string;
+      structuredAnswer?: StructuredAnswer;
       citations: CitationDTO[];
     })
   | (ConversationInfo & DebugTraceInfo & ResultExplanationInfo & {
@@ -220,4 +253,9 @@ export type AskResponse =
       status: "OUT_OF_SCOPE";
       questionId: string;
       message: string;
+    })
+  | (ConversationInfo & DebugTraceInfo & ResultExplanationInfo & {
+      status: "NEEDS_CLARIFICATION";
+      message: string;
+      suggestions: string[];
     });

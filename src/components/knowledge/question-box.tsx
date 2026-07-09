@@ -1,14 +1,19 @@
 "use client";
 
-import { useMemo, useState, type KeyboardEvent } from "react";
-import { Brain, ChevronDown, ChevronUp, ExternalLink, FilePlus2, Search, Send } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import Link from "next/link";
+import { BookOpen, Brain, ExternalLink, FilePlus2, Search, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { LinkifiedText, MarkdownText, SourceExcerptBlock } from "@/components/knowledge/source-excerpt";
+import { LinkifiedText, MarkdownText } from "@/components/knowledge/source-excerpt";
 import { FloatingCardsField } from "@/components/knowledge/floating-cards-field";
 import { UnsolvedButton } from "@/components/knowledge/unsolved-button";
+import {
+  restoreKnowledgeAskScrollPosition,
+  saveKnowledgeAskScrollPosition,
+} from "@/lib/knowledge/ask-page-session";
 import {
   SOURCE_TYPE_LABELS,
   VERIFICATION_STATUS_LABELS,
@@ -16,11 +21,42 @@ import {
   type CitationDTO,
   type KnowledgeTrace,
   type ResultExplanation,
+  type StructuredAnswer,
+  type StructuredAnswerBlockRole,
 } from "@/lib/knowledge/types";
 
 type GroupedCitation = Omit<CitationDTO, "claimText"> & { claimTexts: string[] };
 type AnswerMode = "cards" | "think";
 type AskErrorResponse = { code?: string; error?: string };
+type StoredQuestionBoxState = {
+  question: string;
+  answer: AskResponse | null;
+  conversationId: string | null;
+  answerMode: AnswerMode;
+};
+
+const QUESTION_BOX_STORAGE_KEY = "nju-knowledge-question-box-state";
+
+function readStoredQuestionBoxState(): StoredQuestionBoxState | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(QUESTION_BOX_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredQuestionBoxState>;
+    if (parsed.answerMode !== "cards" && parsed.answerMode !== "think") return null;
+
+    return {
+      question: typeof parsed.question === "string" ? parsed.question : "",
+      answer: parsed.answer ?? null,
+      conversationId:
+        typeof parsed.conversationId === "string" ? parsed.conversationId : null,
+      answerMode: parsed.answerMode,
+    };
+  } catch {
+    return null;
+  }
+}
 
 function getAskErrorMessage(data: AskErrorResponse) {
   if (data.code === "RATE_LIMITED") {
@@ -55,12 +91,57 @@ function groupCitations(citations: CitationDTO[]): GroupedCitation[] {
 }
 
 export function QuestionBox() {
+  const restoredRef = useRef(false);
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<AskResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [answerMode, setAnswerMode] = useState<AnswerMode>("think");
+
+  useEffect(() => {
+    const stored = readStoredQuestionBoxState();
+    if (stored) {
+      setQuestion(stored.question);
+      setAnswer(stored.answer);
+      setConversationId(stored.conversationId);
+      setAnswerMode(stored.answerMode);
+      restoreKnowledgeAskScrollPosition();
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("pagehide", saveKnowledgeAskScrollPosition);
+
+    return () => {
+      window.removeEventListener("pagehide", saveKnowledgeAskScrollPosition);
+      saveKnowledgeAskScrollPosition();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!restoredRef.current) {
+      restoredRef.current = true;
+      return;
+    }
+
+    try {
+      if (!question.trim() && !answer && !conversationId) {
+        window.sessionStorage.removeItem(QUESTION_BOX_STORAGE_KEY);
+        return;
+      }
+
+      const state: StoredQuestionBoxState = {
+        question,
+        answer,
+        conversationId,
+        answerMode,
+      };
+      window.sessionStorage.setItem(QUESTION_BOX_STORAGE_KEY, JSON.stringify(state));
+    } catch {
+      // Session restore is best-effort; asking should still work if storage is blocked.
+    }
+  }, [answer, answerMode, conversationId, question]);
 
   const askQuestion = async () => {
     const trimmedQuestion = question.trim();
@@ -186,14 +267,39 @@ export function QuestionBox() {
       )}
 
       {answer?.status === "ANSWERED" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">回答</CardTitle>
+        <Card className="overflow-hidden">
+          <CardHeader className="border-b bg-muted/20">
+            <CardTitle className="text-base">回答</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-5">
-            <MarkdownText text={answer.answer} className="text-sm leading-7" />
-            <div className="space-y-3">
-              <h2 className="text-sm font-medium">引用来源</h2>
+          <CardContent className="space-y-6 p-5">
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge variant={answer.answerMode === "FALLBACK" ? "outline" : "secondary"}>
+                  {answer.answerMode === "FALLBACK" ? "卡片兜底摘要" : "基于知识卡片"}
+                </Badge>
+                <span className="text-xs text-muted-foreground">
+                  {answer.citations.length} 条引用
+                </span>
+              </div>
+              {answer.answerMode === "FALLBACK" && (
+                <div className="border-l-4 border-l-amber-500 bg-amber-500/10 px-4 py-3 text-sm leading-6">
+                  <p className="font-medium">模型整理失败，以下是知识卡片兜底摘要。</p>
+                  <p className="mt-1 text-muted-foreground">
+                    系统没有拿到可用的模型整理结果，可能是模型超时、返回格式异常或中转站暂时不可用。
+                  </p>
+                </div>
+              )}
+              {answer.structuredAnswer ? (
+                <StructuredAnswerView answer={answer.structuredAnswer} />
+              ) : (
+                <MarkdownText
+                  text={answer.answer}
+                  className="max-w-none text-[15px] leading-8 text-foreground [&_li]:my-1.5 [&_ol]:space-y-1 [&_p]:my-2 [&_ul]:space-y-1"
+                />
+              )}
+            </section>
+            <div className="space-y-3 border-t pt-4">
+              <h2 className="text-sm font-medium">依据卡片</h2>
               <CitationList citations={answer.citations} />
             </div>
             <UnsolvedButton key={answer.questionId} questionId={answer.questionId} />
@@ -218,6 +324,28 @@ export function QuestionBox() {
           <CardContent className="p-5">
             <Badge variant="outline" className="mb-3">不属 P0</Badge>
             <p className="text-sm leading-6 text-muted-foreground">{answer.message}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {answer?.status === "NEEDS_CLARIFICATION" && (
+        <Card>
+          <CardContent className="space-y-3 p-5">
+            <Badge variant="secondary">请补充问题</Badge>
+            <p className="text-sm leading-6 text-muted-foreground">{answer.message}</p>
+            <div className="flex flex-wrap gap-2">
+              {answer.suggestions.map((suggestion) => (
+                <Button
+                  key={suggestion}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setQuestion(suggestion)}
+                >
+                  {suggestion}
+                </Button>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -409,6 +537,60 @@ function DebugSection({ title, children }: { title: string; children: React.Reac
   );
 }
 
+const STRUCTURED_BLOCK_ROLE_LABELS: Record<StructuredAnswerBlockRole, string> = {
+  answer: "回答",
+  step: "步骤",
+  requirement: "条件",
+  option: "选项",
+  risk: "注意",
+  action: "建议",
+  gap: "缺口",
+  note: "提示",
+};
+
+const STRUCTURED_BLOCK_ROLE_STYLES: Record<StructuredAnswerBlockRole, string> = {
+  answer: "border-l-primary bg-primary/5",
+  step: "border-l-blue-500 bg-blue-500/5",
+  requirement: "border-l-amber-500 bg-amber-500/5",
+  option: "border-l-violet-500 bg-violet-500/5",
+  risk: "border-l-destructive bg-destructive/5",
+  action: "border-l-emerald-500 bg-emerald-500/5",
+  gap: "border-l-orange-500 bg-orange-500/5",
+  note: "border-l-muted-foreground/50 bg-muted/30",
+};
+
+function StructuredAnswerView({ answer }: { answer: StructuredAnswer }) {
+  return (
+    <div className="space-y-4">
+      <p className="text-base font-medium leading-7">
+        <LinkifiedText text={answer.headline} />
+      </p>
+      <div className="space-y-3">
+        {answer.blocks.map((block, index) => (
+          <section
+            key={`${block.role}-${block.title}-${index}`}
+            className={`border-l-4 px-4 py-3 ${STRUCTURED_BLOCK_ROLE_STYLES[block.role]}`}
+          >
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <Badge variant={block.role === "gap" || block.role === "risk" ? "outline" : "secondary"}>
+                {STRUCTURED_BLOCK_ROLE_LABELS[block.role]}
+              </Badge>
+              <h2 className="text-sm font-semibold">{block.title}</h2>
+            </div>
+            <ul className="space-y-2">
+              {block.items.map((item, itemIndex) => (
+                <li key={itemIndex} className="break-words text-sm leading-7 text-muted-foreground">
+                  <LinkifiedText text={item} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CitationList({ citations }: { citations: CitationDTO[] }) {
   const grouped = useMemo(() => groupCitations(citations), [citations]);
   return (
@@ -421,33 +603,9 @@ function CitationList({ citations }: { citations: CitationDTO[] }) {
 }
 
 function CitationItem({ citation }: { citation: GroupedCitation }) {
-  const [showVerification, setShowVerification] = useState(false);
-
-  const toggleVerification = () => {
-    setShowVerification((value) => !value);
-  };
-
-  const expandVerification = () => {
-    setShowVerification(true);
-  };
-
-  const handleCitationKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.target !== event.currentTarget) return;
-    if (event.key !== "Enter" && event.key !== " ") return;
-
-    event.preventDefault();
-    expandVerification();
-  };
-
   return (
     <div
-      role="button"
-      tabIndex={0}
-      aria-expanded={showVerification}
-      aria-label={`${showVerification ? "收起" : "核实"}知识卡片：${citation.summary}`}
-      className="cursor-pointer rounded-md border p-3 transition hover:border-primary/60 hover:bg-muted/20 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-      onClick={expandVerification}
-      onKeyDown={handleCitationKeyDown}
+      className="rounded-md border bg-background p-3 transition hover:border-primary/60 hover:bg-muted/20"
     >
       <div className="mb-2 flex flex-wrap gap-2">
         <Badge variant="outline">{SOURCE_TYPE_LABELS[citation.sourceType]}</Badge>
@@ -469,17 +627,17 @@ function CitationItem({ citation }: { citation: GroupedCitation }) {
       </ul>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          onClick={(event) => {
-            event.stopPropagation();
-            toggleVerification();
-          }}
-        >
-          {showVerification ? <ChevronUp className="mr-1 h-4 w-4" /> : <ChevronDown className="mr-1 h-4 w-4" />}
-          {showVerification ? "收起核实材料" : "核实这张卡片"}
+        <Button asChild variant="outline" size="sm">
+          <Link
+            href={`/knowledge/cards/${citation.cardId}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              saveKnowledgeAskScrollPosition();
+            }}
+          >
+            <BookOpen className="mr-2 h-4 w-4" />
+            查看卡片
+          </Link>
         </Button>
         {citation.sourceUrl && (
           <Button asChild variant="ghost" size="sm">
@@ -496,22 +654,6 @@ function CitationItem({ citation }: { citation: GroupedCitation }) {
         )}
       </div>
 
-      {showVerification && (
-        <div className="mt-2 space-y-3 border-t pt-3">
-          <MarkdownText
-            text={citation.body}
-            className="rounded-md bg-muted/50 p-3 text-sm leading-6"
-          />
-          {citation.sourceExcerpt && (
-            <SourceExcerptBlock sourceExcerpt={citation.sourceExcerpt} />
-          )}
-          <div className="flex flex-col gap-2 text-sm md:flex-row md:items-center md:justify-between">
-            <span className="break-words text-muted-foreground">
-              <LinkifiedText text={citation.sourceDescription} />
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

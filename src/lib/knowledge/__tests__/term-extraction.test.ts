@@ -111,6 +111,49 @@ describe("extractRetrievalTerms", () => {
     await expect(extractRetrievalTerms("考试前发烧了怎么办")).resolves.toContain("缓考");
   });
 
+  it("expands campus overview wording into broad campus-life anchors", async () => {
+    const terms = await extractRetrievalTerms("仙林校区概况");
+    expect(terms).toContain("仙林");
+    expect(terms).toContain("校区概况");
+    expect(terms).toContain("校园生活");
+    expect(terms).toContain("校区交通");
+    expect(terms).toContain("宿舍");
+    expect(terms).toContain("食堂");
+  });
+
+  it("does not expand concrete campus food questions into campus overview anchors", async () => {
+    const result = await analyzeRetrievalTerms("仙林校区食堂有什么？");
+    expect(result.terms).toContain("仙林");
+    expect(result.terms).toContain("食堂");
+    expect(result.terms).not.toContain("校区概况");
+    expect(result.terms).not.toContain("宿舍");
+    expect(result.terms).not.toContain("通勤");
+    expect(result.aliases).toContainEqual(
+      expect.objectContaining({
+        matchedTriggers: ["有什么"],
+        status: "REJECTED",
+        reason: "BLOCKED",
+      }),
+    );
+  });
+
+  it("keeps concrete dining recommendation questions out of campus overview", async () => {
+    const result = await analyzeRetrievalTerms("仙林校区吃饭有什么推荐");
+    expect(result.terms).toContain("仙林");
+    expect(result.terms).toContain("食堂");
+    expect(result.terms).toContain("餐饮");
+    expect(result.terms).not.toContain("校区概况");
+    expect(result.terms).not.toContain("宿舍");
+    expect(result.terms).not.toContain("通勤");
+  });
+
+  it("extracts visitor library-entry intent from colloquial wording", async () => {
+    const terms = await extractRetrievalTerms("校外人员能进图书馆吗");
+    expect(terms).toContain("校外人员");
+    expect(terms).toContain("图书馆");
+    expect(terms).toContain("进馆");
+  });
+
   it("explains applied and rejected aliases", async () => {
     const failedCourse = await analyzeRetrievalTerms("我挂科了，我该怎么办？");
     expect(failedCourse.terms).toContain("补考");

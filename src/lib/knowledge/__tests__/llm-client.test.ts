@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { getChatConfig, getEmbeddingConfig, LlmError } from "../llm-client";
+import { getAnswerConfig, getChatConfig, getEmbeddingConfig, LlmError } from "../llm-client";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -57,6 +57,38 @@ describe("getChatConfig", () => {
     delete process.env.KNOWLEDGE_LLM_MODEL;
 
     expect(getChatConfig()).toBeNull();
+  });
+});
+
+describe("getAnswerConfig", () => {
+  it("prioritizes KNOWLEDGE_ANSWER_* vars for final answers", () => {
+    process.env.KNOWLEDGE_ANSWER_API_KEY = "sk-answer";
+    process.env.KNOWLEDGE_ANSWER_MODEL = "gpt-5.5";
+    process.env.KNOWLEDGE_ANSWER_BASE_URL = "https://answer.example.com/v1";
+    process.env.KNOWLEDGE_LLM_API_KEY = "sk-llm";
+    process.env.KNOWLEDGE_LLM_MODEL = "cheap-model";
+    process.env.KNOWLEDGE_LLM_BASE_URL = "https://cheap.example.com/v1";
+
+    const config = getAnswerConfig();
+    expect(config).not.toBeNull();
+    expect(config!.apiKey).toBe("sk-answer");
+    expect(config!.model).toBe("gpt-5.5");
+    expect(config!.baseUrl).toBe("https://answer.example.com/v1");
+  });
+
+  it("falls back to KNOWLEDGE_LLM_* vars when answer vars are not set", () => {
+    process.env.KNOWLEDGE_LLM_API_KEY = "sk-llm";
+    process.env.KNOWLEDGE_LLM_MODEL = "cheap-model";
+    process.env.KNOWLEDGE_LLM_BASE_URL = "https://cheap.example.com/v1";
+    delete process.env.KNOWLEDGE_ANSWER_API_KEY;
+    delete process.env.KNOWLEDGE_ANSWER_MODEL;
+    delete process.env.KNOWLEDGE_ANSWER_BASE_URL;
+
+    const config = getAnswerConfig();
+    expect(config).not.toBeNull();
+    expect(config!.apiKey).toBe("sk-llm");
+    expect(config!.model).toBe("cheap-model");
+    expect(config!.baseUrl).toBe("https://cheap.example.com/v1");
   });
 });
 

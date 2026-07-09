@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { scoreCard, evaluateEvidence } from "../retrieval";
 import type { RetrievalCard, RetrievalResult } from "../retrieval";
-import { classifyP0Scope, classifyNoResult } from "../scope";
+import { classifyNeedsClarification, classifyP0Scope, classifyNoResult } from "../scope";
 import { extractRetrievalTerms } from "../term-extraction";
 import { normalizeQuestionText } from "../validation";
 
@@ -244,6 +244,42 @@ describe("classifyNoResult hard blocks", () => {
   it("returns OUT_OF_SCOPE for hard blocked questions", () => {
     expect(classifyNoResult("\u5357\u4eac\u660e\u5929\u5929\u6c14\u600e\u4e48\u6837")).toBe("OUT_OF_SCOPE");
     expect(classifyNoResult("\u5e2e\u6211\u67e5\u6211\u7684\u6210\u7ee9\u6392\u540d")).toBe("OUT_OF_SCOPE");
+  });
+});
+
+describe("classifyNeedsClarification", () => {
+  it("asks for a concrete aspect for bare campus/entity prompts", () => {
+    const result = classifyNeedsClarification("仙林校区");
+    expect(result?.needsClarification).toBe(true);
+    expect(result?.message).toContain("范围太宽");
+  });
+
+  it("does not block concrete campus service questions", () => {
+    expect(classifyNeedsClarification("仙林校区哪里可以理发")).toBeNull();
+  });
+
+  it("asks for a concrete direction for bare topic prompts", () => {
+    for (const question of ["保研", "挂科", "饭卡", "转专业"]) {
+      const result = classifyNeedsClarification(question);
+      expect(result?.needsClarification).toBe(true);
+      expect(result?.message).toContain("主题词");
+      expect(result?.suggestions.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("asks for a concrete aspect for bare major or school prompts", () => {
+    for (const question of ["人工智能", "商学院", "法学"]) {
+      const result = classifyNeedsClarification(question);
+      expect(result?.needsClarification).toBe(true);
+      expect(result?.message).toContain("专业或院系名");
+      expect(result?.suggestions.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("does not block complete topic questions", () => {
+    expect(classifyNeedsClarification("保研有什么要求")).toBeNull();
+    expect(classifyNeedsClarification("饭卡丢了怎么办")).toBeNull();
+    expect(classifyNeedsClarification("人工智能转专业有什么限制")).toBeNull();
   });
 });
 

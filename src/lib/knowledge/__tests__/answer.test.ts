@@ -5,12 +5,12 @@ vi.mock("@/lib/knowledge/llm-client", async () => {
   const actual = await vi.importActual<typeof import("../llm-client")>("../llm-client");
   return {
     ...actual,
-    chatCompletion: vi.fn().mockRejectedValue(new actual.LlmError("NO_CONFIG")),
+    answerCompletion: vi.fn().mockRejectedValue(new actual.LlmError("NO_CONFIG")),
   };
 });
 
 import { buildCardBoundedAnswer } from "../answer";
-import { chatCompletion } from "../llm-client";
+import { answerCompletion } from "../llm-client";
 
 function makeResult(): RetrievalResult {
   return {
@@ -36,7 +36,7 @@ function makeResult(): RetrievalResult {
 
 describe("buildCardBoundedAnswer", () => {
   it("falls back when the LLM answer introduces unsupported campus context", async () => {
-    vi.mocked(chatCompletion).mockResolvedValueOnce(JSON.stringify({
+    vi.mocked(answerCompletion).mockResolvedValueOnce(JSON.stringify({
       answer: "你可以去苏州校区处理这个问题。",
       citations: [{ cardId: "card-1", claimText: "苏州校区可以处理" }],
     }));
@@ -53,8 +53,19 @@ describe("buildCardBoundedAnswer", () => {
   });
 
   it("keeps a valid LLM answer and appends a partial coverage note when needed", async () => {
-    vi.mocked(chatCompletion).mockResolvedValueOnce(JSON.stringify({
+    vi.mocked(answerCompletion).mockResolvedValueOnce(JSON.stringify({
       answer: "从鼓楼到仙林可以参考地铁和公交路线。",
+      structuredAnswer: {
+        shape: "partial",
+        headline: "目前只能确认地铁和公交路线。",
+        blocks: [
+          {
+            role: "answer",
+            title: "可以确认",
+            items: ["从鼓楼到仙林可以参考地铁和公交路线。"],
+          },
+        ],
+      },
       citations: [{ cardId: "card-1", claimText: "鼓楼到仙林可参考地铁和公交路线" }],
     }));
 
@@ -68,6 +79,8 @@ describe("buildCardBoundedAnswer", () => {
 
     expect(answer.answerMode).toBe("LLM");
     expect(answer.answerText).toContain("从鼓楼到仙林可以参考地铁和公交路线");
+    expect(answer.structuredAnswer?.headline).toBe("目前只能确认地铁和公交路线。");
+    expect(answer.structuredAnswer?.blocks.some((block) => block.title === "需要注意")).toBe(true);
     expect(answer.answerText).toContain("证据缺口");
     expect(answer.answerText).toContain("校车/班车");
   });
@@ -76,8 +89,44 @@ describe("buildCardBoundedAnswer", () => {
     const answer = await buildCardBoundedAnswer("明天鼓楼到浦口班车还有没有票", [makeResult()]);
 
     expect(answer.answerMode).toBe("FALLBACK");
+    expect(answer.structuredAnswer?.headline).toContain("明天鼓楼到浦口班车还有没有票");
+    expect(answer.structuredAnswer?.blocks.some((block) => block.title === "需要注意")).toBe(true);
     expect(answer.answerText).toContain("通用信息和查询路径");
     expect(answer.answerText).toContain("不能确认实时状态、个人数据或当年最终结果");
+  });
+
+  it("keeps flexible structured blocks from a valid LLM answer", async () => {
+    vi.mocked(answerCompletion).mockResolvedValueOnce(JSON.stringify({
+      answer: "转专业前先确认目标专业准入条件，再评估分流影响。",
+      structuredAnswer: {
+        shape: "policy",
+        headline: "转专业前先确认准入条件和分流影响。",
+        blocks: [
+          {
+            role: "requirement",
+            title: "先确认",
+            items: ["目标专业是否接收你当前年级或大类。"],
+          },
+          {
+            role: "action",
+            title: "下一步",
+            items: ["先读目标院系当年转专业通知。"],
+          },
+        ],
+      },
+      citations: [{ cardId: "card-1", claimText: "转专业前先确认目标专业准入条件" }],
+    }));
+
+    const result = makeResult();
+    result.card.summary = "转专业前需要确认什么";
+    result.card.body = "转专业前先确认目标专业准入条件，再评估分流影响。目标专业可能限制年级或大类。";
+    result.matchedTerms = ["转专业", "准入条件", "分流"];
+
+    const answer = await buildCardBoundedAnswer("转专业前要确认什么", [result]);
+
+    expect(answer.answerMode).toBe("LLM");
+    expect(answer.structuredAnswer?.shape).toBe("policy");
+    expect(answer.structuredAnswer?.blocks.map((block) => block.role)).toEqual(["requirement", "action"]);
   });
 
   it("does not add the limited-answer note for ordinary stable questions", async () => {

@@ -34,6 +34,22 @@ export function getChatConfig(): ChatConfig | null {
   return { apiKey, model, baseUrl };
 }
 
+export function getAnswerConfig(): ChatConfig | null {
+  const apiKey =
+    process.env.KNOWLEDGE_ANSWER_API_KEY ||
+    process.env.KNOWLEDGE_LLM_API_KEY ||
+    process.env.OPENAI_API_KEY;
+  const model = process.env.KNOWLEDGE_ANSWER_MODEL || process.env.KNOWLEDGE_LLM_MODEL;
+  const baseUrl = sanitizeBaseUrl(
+    process.env.KNOWLEDGE_ANSWER_BASE_URL ||
+      process.env.KNOWLEDGE_LLM_BASE_URL ||
+      process.env.OPENAI_BASE_URL ||
+      "https://api.openai.com/v1",
+  );
+  if (!apiKey || !model) return null;
+  return { apiKey, model, baseUrl };
+}
+
 export function getEmbeddingConfig(): EmbeddingConfig | null {
   const apiKey =
     process.env.KNOWLEDGE_EMBEDDING_API_KEY ||
@@ -57,10 +73,8 @@ export interface ChatCompletionParams {
   timeoutMs?: number;
 }
 
-export async function chatCompletion(params: ChatCompletionParams): Promise<string> {
-  const config = getChatConfig();
+async function runChatCompletion(params: ChatCompletionParams, config: ChatConfig | null): Promise<string> {
   if (!config) throw new LlmError("NO_CONFIG");
-
   const { messages, maxTokens = 1024, temperature = 0.1, timeoutMs = 15000 } = params;
 
   const controller = new AbortController();
@@ -108,6 +122,14 @@ export async function chatCompletion(params: ChatCompletionParams): Promise<stri
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function chatCompletion(params: ChatCompletionParams): Promise<string> {
+  return runChatCompletion(params, getChatConfig());
+}
+
+export async function answerCompletion(params: ChatCompletionParams): Promise<string> {
+  return runChatCompletion(params, getAnswerConfig());
 }
 
 export interface EmbeddingParams {

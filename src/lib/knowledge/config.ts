@@ -6,6 +6,7 @@ export const RRF_K = 60;
 
 // Timeouts (ms)
 export const LLM_ANSWER_TIMEOUT = 25_000;
+export const LLM_ANSWER_TIMEOUT_MS = clampNumberEnv("KNOWLEDGE_ANSWER_TIMEOUT_MS", LLM_ANSWER_TIMEOUT, 5_000, 90_000);
 export const QUERY_EXPANSION_TIMEOUT = 8_000;
 export const EMBEDDING_TIMEOUT = 5_000;
 export const EMBEDDING_CONCURRENCY = 5;
@@ -46,3 +47,11 @@ export const MAX_NGRAM = 5;
 // Cache
 export const CACHE_TTL_MS = 3600_000;
 export const CACHE_MAX_ENTRIES = 500;
+
+function clampNumberEnv(name: string, fallback: number, min: number, max: number) {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(value)));
+}

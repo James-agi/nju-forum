@@ -139,6 +139,273 @@ describe("evaluateEvidence", () => {
     expect(result.reason).toBe("PREFILTER_PASSED");
   });
 
+  it("accepts multiple same-campus cards for a campus overview question", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        score: 8,
+        matchedTerms: ["仙林", "校区", "宿舍"],
+        queryTerms: ["仙林", "校区", "校区概况", "校园生活", "宿舍", "食堂"],
+        originalQueryTerms: ["仙林", "校区", "概况"],
+        cardOverrides: {
+          id: "dorm",
+          summary: "仙林校区宿舍条件怎么样？一组团和二组团的区别是什么？",
+          body: "仙林校区宿舍主要分布在一组团和二组团，卡片整理住宿生活信息。",
+          domainTag: "校园生活",
+        },
+      }),
+      makeResult({
+        score: 8,
+        matchedTerms: ["仙林", "校区", "通勤"],
+        queryTerms: ["仙林", "校区", "校区概况", "校区交通", "通勤"],
+        originalQueryTerms: ["仙林", "校区", "概况"],
+        cardOverrides: {
+          id: "traffic",
+          summary: "鼓楼北园到仙林校区怎么通勤？",
+          body: "介绍到仙林校区的地铁和公交通勤路线。",
+          domainTag: "校区交通",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.reason).toBe("PREFILTER_PASSED");
+    expect(result.cards.map((card) => card.card.id)).toEqual(["dorm", "traffic"]);
+  });
+
+  it("diversifies campus overview evidence across student-life facets", () => {
+    const sharedTerms = ["仙林", "校区", "校区概况", "校园生活", "校区交通", "宿舍", "食堂", "通勤", "商铺"];
+    const result = evaluateEvidence([
+      makeResult({
+        score: 18,
+        matchedTerms: ["仙林", "商铺", "校区"],
+        queryTerms: sharedTerms,
+        originalQueryTerms: ["仙林", "校区", "概况"],
+        cardOverrides: {
+          id: "services",
+          summary: "仙林校区一组团附近有哪些商铺？",
+          body: "仙林校区一组团附近有教育超市、快递、生活服务和餐饮商铺。",
+          domainTag: "组织资源",
+        },
+      }),
+      makeResult({
+        score: 17,
+        matchedTerms: ["仙林", "宿舍", "校区"],
+        queryTerms: sharedTerms,
+        originalQueryTerms: ["仙林", "校区", "概况"],
+        cardOverrides: {
+          id: "dorm-a",
+          summary: "仙林校区宿舍条件怎么样？",
+          body: "仙林校区宿舍主要分布在一组团和二组团。",
+          domainTag: "校园生活",
+        },
+      }),
+      makeResult({
+        score: 16,
+        matchedTerms: ["仙林", "宿舍", "校区"],
+        queryTerms: sharedTerms,
+        originalQueryTerms: ["仙林", "校区", "概况"],
+        cardOverrides: {
+          id: "dorm-b",
+          summary: "南大仙林校区一组团和二组团宿舍有什么区别？",
+          body: "介绍仙林宿舍组团差异。",
+          domainTag: "校园生活",
+        },
+      }),
+      makeResult({
+        score: 15,
+        matchedTerms: ["校区交通", "仙林", "通勤", "校区"],
+        queryTerms: sharedTerms,
+        originalQueryTerms: ["仙林", "校区", "概况"],
+        cardOverrides: {
+          id: "traffic",
+          summary: "鼓楼到仙林校区怎么通勤？",
+          body: "介绍到仙林校区的地铁和公交路线。",
+          domainTag: "校区交通",
+        },
+      }),
+      makeResult({
+        score: 14,
+        matchedTerms: ["仙林", "食堂", "校区"],
+        queryTerms: sharedTerms,
+        originalQueryTerms: ["仙林", "校区", "概况"],
+        cardOverrides: {
+          id: "food",
+          summary: "仙林和鼓楼食堂有哪些、味道怎么样？",
+          body: "介绍仙林校区食堂和餐饮选择。",
+          domainTag: "校园生活",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.cards.map((card) => card.card.id)).toEqual(["services", "dorm-a", "traffic", "food"]);
+  });
+
+  it("keeps concrete campus food questions out of campus overview evidence", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "仙林校区食堂有什么？",
+        score: 18,
+        matchedTerms: ["仙林", "宿舍", "校区"],
+        queryTerms: ["仙林", "校区", "食堂"],
+        originalQueryTerms: ["仙林", "校区", "食堂"],
+        cardOverrides: {
+          id: "dorm",
+          summary: "仙林校区宿舍条件怎么样？",
+          body: "仙林校区宿舍主要分布在一组团和二组团。",
+          domainTag: "校园生活",
+        },
+      }),
+      makeResult({
+        question: "仙林校区食堂有什么？",
+        score: 12,
+        matchedTerms: ["仙林", "食堂", "校区"],
+        queryTerms: ["仙林", "校区", "食堂"],
+        originalQueryTerms: ["仙林", "校区", "食堂"],
+        cardOverrides: {
+          id: "food",
+          summary: "仙林和鼓楼食堂有哪些、味道怎么样？",
+          body: "仙林校区食堂包括多个学生餐厅，卡片整理了食堂位置和口味情况。",
+          domainTag: "校园生活",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.cards.map((card) => card.card.id)).toEqual(["food"]);
+  });
+
+  it("keeps dining recommendation questions focused on food evidence", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "仙林校区吃饭有什么推荐",
+        score: 18,
+        matchedTerms: ["仙林", "宿舍", "校区"],
+        queryTerms: ["仙林", "校区", "吃饭", "食堂", "餐饮", "推荐"],
+        originalQueryTerms: ["仙林", "校区", "吃饭", "食堂", "餐饮", "推荐"],
+        cardOverrides: {
+          id: "dorm",
+          summary: "仙林校区宿舍条件怎么样？",
+          body: "仙林校区宿舍主要分布在一组团和二组团。",
+          domainTag: "校园生活",
+        },
+      }),
+      makeResult({
+        question: "仙林校区吃饭有什么推荐",
+        score: 12,
+        matchedTerms: ["仙林", "食堂", "餐饮", "校区"],
+        queryTerms: ["仙林", "校区", "吃饭", "食堂", "餐饮", "推荐"],
+        originalQueryTerms: ["仙林", "校区", "吃饭", "食堂", "餐饮", "推荐"],
+        cardOverrides: {
+          id: "food",
+          summary: "仙林和鼓楼食堂有哪些、味道怎么样？",
+          body: "仙林校区食堂包括多个学生餐厅，卡片整理了餐饮选择和口味情况。",
+          domainTag: "校园生活",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.cards.map((card) => card.card.id)).toEqual(["food"]);
+  });
+
+  it("does not answer library closing-time questions from nearby cafe cards", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "图书馆几点关门",
+        score: 10,
+        matchedTerms: ["图书馆", "关门"],
+        queryTerms: ["图书馆", "几点", "关门"],
+        originalQueryTerms: ["图书馆", "几点", "关门"],
+        cardOverrides: {
+          id: "library-cafes",
+          summary: "仙林校区图书馆附近、四组团及其他校内咖啡点位有哪些？",
+          body: "这张卡整理图书馆附近咖啡点位，部分咖啡店晚上十点关门。",
+          domainTag: "校园办事",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("does not answer current mentor availability from weak mentor mentions", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "哪个导师今年还缺学生",
+        score: 8,
+        matchedTerms: ["导师"],
+        queryTerms: ["导师", "今年", "还缺", "学生"],
+        originalQueryTerms: ["导师", "今年", "还缺", "学生"],
+        cardOverrides: {
+          id: "free-meal",
+          summary: "新生入学有哪些免费吃饭的机会？",
+          body: "有些迎新活动可能由导师或学长学姐组织吃饭。",
+          domainTag: "科研竞赛",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("requires transfer-action evidence for transfer restriction questions", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "人工智能转专业有什么限制",
+        score: 26,
+        matchedTerms: ["人工智能学院", "人工智能", "专业"],
+        queryTerms: ["人工智能学院", "人工智能", "转专业", "限制", "专业"],
+        originalQueryTerms: ["人工智能学院", "人工智能", "转专业", "限制", "专业"],
+        cardOverrides: {
+          id: "ai-major-list",
+          summary: "南京大学有哪些学院和本科专业？（下篇：医学、软件、人工智能等学院）",
+          body: "人工智能学院设有人工智能等本科专业。",
+          domainTag: "专业院系",
+        },
+      }),
+      makeResult({
+        question: "人工智能转专业有什么限制",
+        score: 18,
+        matchedTerms: ["人工智能", "转专业", "限制"],
+        queryTerms: ["人工智能学院", "人工智能", "转专业", "限制", "专业"],
+        originalQueryTerms: ["人工智能学院", "人工智能", "转专业", "限制", "专业"],
+        cardOverrides: {
+          id: "ai-transfer-rule",
+          summary: "南京大学转专业有哪些限制？人工智能等专业有什么准入要求？",
+          body: "转专业需要查看当年准入方案，部分专业可能限制大二转入。",
+          domainTag: "分流转专业",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.cards.map((card) => card.card.id)).toEqual(["ai-transfer-rule"]);
+  });
+
+  it("does not answer general recommendation requirements from impact-only cards", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "保研有什么要求",
+        score: 10,
+        matchedTerms: ["保研", "要求"],
+        queryTerms: ["保研", "要求"],
+        originalQueryTerms: ["保研", "要求"],
+        cardOverrides: {
+          id: "failed-course-impact",
+          summary: "挂科了怎么办？补考和重修的区别是什么，成绩怎么算，保研受影响吗？",
+          body: "这张卡说明挂科和重修可能影响保研，但只讨论成绩记录和后续影响。",
+          domainTag: "成绩学籍",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
   it("accepts a low-scoring direct title match for a concrete campus service", () => {
     const results = [
       makeResult({

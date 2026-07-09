@@ -6,7 +6,7 @@ import { buildCardBoundedAnswer } from "@/lib/knowledge/answer";
 import { expandQueryTerms } from "@/lib/knowledge/query-expansion";
 import { checkRateLimit } from "@/lib/knowledge/rate-limit";
 import { evaluateEvidence, retrieveHybrid } from "@/lib/knowledge/retrieval";
-import { classifyNoResult, classifyP0Scope } from "@/lib/knowledge/scope";
+import { classifyNeedsClarification, classifyNoResult, classifyP0Scope } from "@/lib/knowledge/scope";
 import {
   askRequestSchema,
   formatValidationError,
@@ -188,6 +188,36 @@ export async function POST(req: Request) {
       return NextResponse.json(withResponseDetails(response, trace, authz.user.role));
     }
 
+    trace.mark("termExtraction");
+    const termTrace = await analyzeRetrievalTerms(questionText);
+    trace.setTermExtraction({
+      ...termTrace,
+      durationMs: trace.elapsedMs("termExtraction"),
+    });
+
+    const clarification = classifyNeedsClarification(questionText);
+    if (clarification) {
+      trace.setExpansion({ terms: [], durationMs: 0 });
+      trace.setRetrieval({ candidates: [], durationMs: 0 });
+      trace.setEvidence({
+        sufficient: false,
+        reason: "NEEDS_CLARIFICATION",
+        cardsCount: 0,
+        selectedCards: [],
+      });
+      trace.setAnswer({ durationMs: 0 });
+
+      const response: AskResponse = {
+        status: "NEEDS_CLARIFICATION",
+        conversationId,
+        turnIndex,
+        message: clarification.message,
+        suggestions: clarification.suggestions,
+      };
+
+      return NextResponse.json(withResponseDetails(response, trace, authz.user.role));
+    }
+
     // 单轮问答走缓存
     const cacheKey = normalizedQuestion;
     if (authz.user.role !== "ADMIN" && responseMode === "think" && (!conversationId || turnIndex === 1)) {
@@ -212,13 +242,6 @@ export async function POST(req: Request) {
     } else {
       trace.setExpansion({ terms: [], durationMs: 0 });
     }
-
-    trace.mark("termExtraction");
-    const termTrace = await analyzeRetrievalTerms(questionText);
-    trace.setTermExtraction({
-      ...termTrace,
-      durationMs: trace.elapsedMs("termExtraction"),
-    });
 
     trace.mark("retrieval");
     const retrieval = await retrieveHybrid(questionText, 5, expandedTerms);
@@ -436,6 +459,9 @@ export async function POST(req: Request) {
       conversationId,
       turnIndex,
       answer: answerText,
+      answerMode: groundedAnswer.answerMode,
+      fallbackReason: groundedAnswer.fallbackReason,
+      structuredAnswer: groundedAnswer.structuredAnswer,
       citations: citationResponse,
     };
     const responseWithDetails = withResponseDetails(response, trace, authz.user.role);
