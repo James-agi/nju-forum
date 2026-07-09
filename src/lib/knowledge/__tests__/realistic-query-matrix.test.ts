@@ -104,9 +104,128 @@ describe("realistic user query matrix", () => {
         },
       }),
     ],
+    [
+      "晚上十点以后还有食堂吗",
+      makeResult({
+        question: "晚上十点以后还有食堂吗",
+        score: 15,
+        matchedTerms: ["食堂"],
+        queryTerms: ["食堂", "晚上", "十点", "以后"],
+        originalQueryTerms: ["食堂", "晚上", "十点", "以后"],
+        cardOverrides: {
+          summary: "南大有哪些食堂福利和餐券？",
+          body: "这张卡整理一分钱早餐、校庆餐券和节日特色食品。",
+        },
+      }),
+    ],
+    [
+      "快递站怎么填",
+      makeResult({
+        question: "快递站怎么填",
+        score: 15,
+        matchedTerms: ["快递"],
+        queryTerms: ["快递站", "快递", "怎么填"],
+        originalQueryTerms: ["快递站", "怎么填"],
+        cardOverrides: {
+          summary: "到付快递诈骗怎么识别",
+          body: "没买东西却收到到付快递时，建议直接拒收。",
+        },
+      }),
+    ],
+    [
+      "洗衣服怎么办",
+      makeResult({
+        question: "洗衣服怎么办",
+        score: 15,
+        matchedTerms: ["洗衣", "洗衣服"],
+        queryTerms: ["洗衣店", "洗衣", "洗衣服"],
+        originalQueryTerms: ["洗衣店", "洗衣", "洗衣服"],
+        cardOverrides: {
+          summary: "新生开学需要带哪些日化用品？",
+          body: "建议带洗衣液、水盆和肥皂，贴身衣物可以手洗。",
+        },
+      }),
+    ],
+    [
+      "到付快递怎么识别",
+      makeResult({
+        question: "到付快递怎么识别",
+        score: 15,
+        matchedTerms: ["快递"],
+        queryTerms: ["快递", "怎么识别", "付快"],
+        originalQueryTerms: ["快递", "怎么识别", "付快"],
+        cardOverrides: {
+          summary: "南京大学快递地址怎么写？",
+          body: "仙林校区按组团填写菜根潭、静园或勇园快递站地址。",
+        },
+      }),
+    ],
   ])("rejects weak evidence for direct-answer query: %s", (_question, result) => {
     const evidence = evaluateEvidence([result]);
     expect(evidence.sufficient).toBe(false);
     expect(evidence.reason).toBe("UNRELATED");
+  });
+
+  it.each([
+    [
+      "快递站怎么填",
+      makeResult({
+        question: "快递站怎么填",
+        score: 18,
+        matchedTerms: ["快递站", "快递"],
+        queryTerms: ["快递站", "快递", "怎么填"],
+        originalQueryTerms: ["快递站", "怎么填"],
+        cardOverrides: {
+          summary: "南京大学快递地址怎么写？",
+          body: "仙林校区按组团填写菜根潭、静园或勇园快递站地址；鼓楼校区统一填写汉口路22号南京大学鼓楼校区。",
+        },
+      }),
+    ],
+    [
+      "洗衣服怎么办",
+      makeResult({
+        question: "洗衣服怎么办",
+        score: 18,
+        matchedTerms: ["洗衣", "洗衣服"],
+        queryTerms: ["洗衣店", "洗衣", "洗衣服"],
+        originalQueryTerms: ["洗衣店", "洗衣", "洗衣服"],
+        cardOverrides: {
+          summary: "宿舍洗衣、用电、门禁、入住和日常管理规则有哪些？",
+          body: "仙林一楼洗衣房有公共洗衣机，手机扫码支付，每次2到6元。",
+        },
+      }),
+    ],
+    [
+      "鼓楼晚上哪里能吃饭",
+      makeResult({
+        question: "鼓楼晚上哪里能吃饭",
+        score: 18,
+        matchedTerms: ["鼓楼", "食堂", "晚上"],
+        queryTerms: ["鼓楼", "吃饭", "餐厅", "食堂", "晚上", "哪里"],
+        originalQueryTerms: ["鼓楼", "晚上", "吃饭"],
+        cardOverrides: {
+          summary: "鼓楼校区食堂和餐厅有哪些推荐？",
+          body: "西苑餐厅中午和晚上营业，食堂吃腻了也可以出校门找吃的。",
+        },
+      }),
+    ],
+    [
+      "到付快递怎么识别",
+      makeResult({
+        question: "到付快递怎么识别",
+        score: 18,
+        matchedTerms: ["快递", "怎么识别", "付快"],
+        queryTerms: ["快递", "怎么识别", "付快"],
+        originalQueryTerms: ["快递", "怎么识别", "付快"],
+        cardOverrides: {
+          summary: "到付快递诈骗怎么识别",
+          body: "没买东西却收到到付快递时，可能是快递单信息泄露导致的诈骗，建议直接拒收。",
+        },
+      }),
+    ],
+  ])("accepts direct evidence for slotted service query: %s", (_question, result) => {
+    const evidence = evaluateEvidence([result]);
+    expect(evidence.sufficient).toBe(true);
+    expect(evidence.reason).toBe("PREFILTER_PASSED");
   });
 });
