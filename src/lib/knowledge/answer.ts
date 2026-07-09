@@ -172,14 +172,6 @@ function appendNoteBlock(structuredAnswer: StructuredAnswer | undefined, title: 
   };
 }
 
-function answerShapeForQuestion(question: string): StructuredAnswerShape {
-  if (/流程|步骤|申请|办理|怎么弄|怎么做|如何/.test(question)) return "procedure";
-  if (/区别|对比|比较|还是|哪个|哪种/.test(question)) return "comparison";
-  if (/政策|规定|条件|要求|能不能|是否|可以吗/.test(question)) return "policy";
-  if (/故障|失败|出错|打不开|没电|坏了/.test(question)) return "troubleshoot";
-  return "direct";
-}
-
 function needsLimitedAnswerNote(question: string) {
   return LIMITED_ANSWER_PATTERNS.some((pattern) => pattern.test(question));
 }
@@ -311,63 +303,29 @@ function trimForAnswer(text: string, maxLength = 320) {
   return `${compact.slice(0, maxLength)}...`;
 }
 
-function buildDeterministicStructuredAnswer(question: string, evidence: RetrievalResult[]): StructuredAnswer {
-  const answerItems = evidence.slice(0, 4).map((result) => {
-    const chunkText = result.evidenceChunks?.length
-      ? result.evidenceChunks.map((chunk) => trimForAnswer(chunk.text, 140)).join(" / ")
-      : trimForAnswer(result.card.body, 140);
-    return `${result.card.summary}：${chunkText}`;
-  });
+function evidenceSnippetForFallback(result: RetrievalResult, maxLength = 260) {
+  if (result.evidenceChunks?.length) {
+    return result.evidenceChunks
+      .map((chunk) => trimForAnswer(chunk.text, maxLength))
+      .join(" / ");
+  }
 
-  return {
-    shape: answerShapeForQuestion(question),
-    headline: `针对「${question}」，当前只能根据已匹配到的知识卡片给出有限回答。`,
-    blocks: [
-      {
-        role: "answer",
-        title: "可以确认",
-        items: answerItems,
-      },
-      {
-        role: "note",
-        title: "需要注意",
-        items: ["以上内容只来自当前引用卡片；没有被卡片覆盖的细节，不能直接确认。"],
-      },
-    ],
-  };
+  return trimForAnswer(result.card.body, maxLength);
 }
 
 function buildDeterministicAnswer(question: string, evidence: RetrievalResult[]): CardBoundedAnswer {
-  const lines = evidence.map((result, index) => {
-    const chunkText = result.evidenceChunks?.length
-      ? result.evidenceChunks.map((chunk) => trimForAnswer(chunk.text, 220)).join(" / ")
-      : trimForAnswer(result.card.body);
-    return `${index + 1}. **${result.card.summary}**：${chunkText}`;
-  });
   const baseAnswerText = [
-    `针对「${question}」，当前只能根据已匹配到的知识卡片给出有限回答。`,
+    `针对「${question}」，模型暂时没能整理出可靠回答。下面展示知识库中命中的相关片段，供你直接查看原始依据。`,
     "",
-    "### 可以确认",
-    lines.join("\n"),
-    "",
-    "### 需要注意",
     "以上内容只来自当前引用卡片；没有被卡片覆盖的细节，不能直接确认。",
   ].join("\n");
   const answerText = finalizeAnswerText(question, baseAnswerText, evidence);
-  const structuredAnswer = answerText.startsWith(baseAnswerText) && answerText !== baseAnswerText
-    ? appendNoteBlock(
-        buildDeterministicStructuredAnswer(question, evidence),
-        "需要注意",
-        answerText.slice(baseAnswerText.length).trim(),
-      )
-    : buildDeterministicStructuredAnswer(question, evidence);
 
   return {
     answerText,
-    structuredAnswer,
     citations: evidence.map((result) => ({
       cardId: result.card.id,
-      claimText: result.card.summary,
+      claimText: evidenceSnippetForFallback(result),
     })),
     answerMode: "FALLBACK",
   };

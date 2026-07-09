@@ -89,10 +89,10 @@ describe("buildCardBoundedAnswer", () => {
     const answer = await buildCardBoundedAnswer("明天鼓楼到浦口班车还有没有票", [makeResult()]);
 
     expect(answer.answerMode).toBe("FALLBACK");
-    expect(answer.structuredAnswer?.headline).toContain("明天鼓楼到浦口班车还有没有票");
-    expect(answer.structuredAnswer?.blocks.some((block) => block.title === "需要注意")).toBe(true);
+    expect(answer.structuredAnswer).toBeUndefined();
     expect(answer.answerText).toContain("通用信息和查询路径");
     expect(answer.answerText).toContain("不能确认实时状态、个人数据或当年最终结果");
+    expect(answer.citations[0]?.claimText).toContain("公共交通和校园班车路线");
   });
 
   it("keeps flexible structured blocks from a valid LLM answer", async () => {
@@ -151,8 +151,9 @@ describe("buildCardBoundedAnswer", () => {
 
     const answer = await buildCardBoundedAnswer("鼓楼到浦口怎么通勤", [result]);
 
-    expect(answer.answerText).toContain("第二段");
-    expect(answer.answerText).not.toContain("第一段");
+    expect(answer.structuredAnswer).toBeUndefined();
+    expect(answer.citations[0]?.claimText).toContain("第二段");
+    expect(answer.citations[0]?.claimText).not.toContain("第一段");
   });
 
   it("adds a scope note when an unspecified-campus question only has one campus evidence", async () => {

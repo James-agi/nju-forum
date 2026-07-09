@@ -275,7 +275,7 @@ export function QuestionBox() {
             <section className="space-y-3">
               <div className="flex items-center gap-2">
                 <Badge variant={answer.answerMode === "FALLBACK" ? "outline" : "secondary"}>
-                  {answer.answerMode === "FALLBACK" ? "卡片兜底摘要" : "基于知识卡片"}
+                  {answer.answerMode === "FALLBACK" ? "相关知识片段" : "基于知识卡片"}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
                   {answer.citations.length} 条引用
@@ -283,13 +283,15 @@ export function QuestionBox() {
               </div>
               {answer.answerMode === "FALLBACK" && (
                 <div className="border-l-4 border-l-amber-500 bg-amber-500/10 px-4 py-3 text-sm leading-6">
-                  <p className="font-medium">模型整理失败，以下是知识卡片兜底摘要。</p>
+                  <p className="font-medium">模型整理失败，以下展示知识库命中的相关片段。</p>
                   <p className="mt-1 text-muted-foreground">
-                    系统没有拿到可用的模型整理结果，可能是模型超时、返回格式异常或中转站暂时不可用。
+                    这些片段未经模型整合，只代表当前匹配到的卡片内容。
                   </p>
                 </div>
               )}
-              {answer.structuredAnswer ? (
+              {answer.answerMode === "FALLBACK" ? (
+                <FallbackFragments answerText={answer.answer} citations={answer.citations} />
+              ) : answer.structuredAnswer ? (
                 <StructuredAnswerView answer={answer.structuredAnswer} />
               ) : (
                 <MarkdownText
@@ -298,10 +300,12 @@ export function QuestionBox() {
                 />
               )}
             </section>
-            <div className="space-y-3 border-t pt-4">
-              <h2 className="text-sm font-medium">依据卡片</h2>
-              <CitationList citations={answer.citations} />
-            </div>
+            {answer.answerMode !== "FALLBACK" && (
+              <div className="space-y-3 border-t pt-4">
+                <h2 className="text-sm font-medium">依据卡片</h2>
+                <CitationList citations={answer.citations} />
+              </div>
+            )}
             <UnsolvedButton key={answer.questionId} questionId={answer.questionId} />
           </CardContent>
         </Card>
@@ -586,6 +590,27 @@ function StructuredAnswerView({ answer }: { answer: StructuredAnswer }) {
             </ul>
           </section>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function FallbackFragments({
+  answerText,
+  citations,
+}: {
+  answerText: string;
+  citations: CitationDTO[];
+}) {
+  return (
+    <div className="space-y-4">
+      <MarkdownText
+        text={answerText}
+        className="max-w-none text-sm leading-7 text-muted-foreground [&_p]:my-2"
+      />
+      <div className="space-y-3 border-t pt-4">
+        <h2 className="text-sm font-medium">相关片段</h2>
+        <CitationList citations={citations} />
       </div>
     </div>
   );
