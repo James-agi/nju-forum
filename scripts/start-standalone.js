@@ -54,6 +54,7 @@ function loadDotEnv(envPath) {
 }
 
 process.env.NODE_ENV = process.env.NODE_ENV || "production";
+loadDotEnv(process.env.DOTENV_CONFIG_PATH || "/var/www/njuknow/.env");
 loadDotEnv(path.join(process.cwd(), ".env"));
 
 require(path.join(process.cwd(), "server.js"));
