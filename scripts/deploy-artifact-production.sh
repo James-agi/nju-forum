@@ -331,17 +331,35 @@ start_smoke_server() {
   local log_file="$2"
 
   if [ -n "${APP_RUN_USER}" ]; then
-    (
-      cd "${cwd}"
-      app_user_cmd env PORT="${HEALTH_PORT}" HOSTNAME="127.0.0.1" node scripts/start-standalone.js
-    ) >"${log_file}" 2>&1 &
+    TEMP_UNIT="${PM2_APP}-smoke-${RELEASE_NAME}.service"
+    root_cmd systemd-run \
+      --quiet \
+      --collect \
+      --unit="${TEMP_UNIT}" \
+      --uid="${APP_RUN_USER}" \
+      --gid="${APP_RUN_GROUP}" \
+      --working-directory="${cwd}" \
+      --setenv="HOME=${APP_RUN_HOME}" \
+      --setenv="PORT=${HEALTH_PORT}" \
+      --setenv="HOSTNAME=127.0.0.1" \
+      --property=Type=simple \
+      --property=RuntimeMaxSec=120 \
+      --property=NoNewPrivileges=true \
+      --property=PrivateTmp=true \
+      --property=PrivateDevices=true \
+      --property=ProtectSystem=strict \
+      --property="ReadOnlyPaths=${cwd}" \
+      --property="ReadWritePaths=-${SHARED_DIR}/public/knowledge-images -${SHARED_DIR}/public/pdfs -${SHARED_DIR}/public/forum-images -${SHARED_DIR}/public/avatars -${SHARED_DIR}/storage/feedback-materials -${SHARED_DIR}/cache/next -${SHARED_DIR}/agent-workflows/card-batch -${SHARED_DIR}/temp-card-vectors.json /tmp" \
+      --property="StandardOutput=append:${log_file}" \
+      --property="StandardError=append:${log_file}" \
+      /usr/bin/node scripts/start-standalone.js
   else
     (
       cd "${cwd}"
-      PORT="${HEALTH_PORT}" HOSTNAME="127.0.0.1" node scripts/start-standalone.js
+      exec setsid env PORT="${HEALTH_PORT}" HOSTNAME="127.0.0.1" node scripts/start-standalone.js
     ) >"${log_file}" 2>&1 &
+    TEMP_PID="$!"
   fi
-  TEMP_PID="$!"
 }
 
 prepare_app_runtime_user
@@ -373,9 +391,15 @@ if [ -z "${ENV_SOURCE}" ] || [ ! -f "${ENV_SOURCE}" ]; then
 fi
 
 TEMP_PID=""
+TEMP_UNIT=""
 finish_temp_server() {
+  if [ -n "${TEMP_UNIT}" ]; then
+    root_cmd systemctl stop "${TEMP_UNIT}" >/dev/null 2>&1 || true
+    root_cmd systemctl reset-failed "${TEMP_UNIT}" >/dev/null 2>&1 || true
+    TEMP_UNIT=""
+  fi
   if [ -n "${TEMP_PID}" ] && kill -0 "${TEMP_PID}" >/dev/null 2>&1; then
-    kill "${TEMP_PID}" >/dev/null 2>&1 || true
+    kill -- "-${TEMP_PID}" >/dev/null 2>&1 || kill "${TEMP_PID}" >/dev/null 2>&1 || true
     wait "${TEMP_PID}" >/dev/null 2>&1 || true
   fi
   TEMP_PID=""
