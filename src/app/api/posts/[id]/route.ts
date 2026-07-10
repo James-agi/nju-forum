@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getSession } from "@/lib/auth-utils";
+import { getVisiblePost } from "@/lib/forum/post-visibility";
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const session = await getSession();
+    const { id } = await params;
     const post = await db.post.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         author: { select: { id: true, name: true, avatar: true, createdAt: true } },
         section: { select: { id: true, name: true, icon: true } },
@@ -20,7 +24,7 @@ export async function GET(
       return NextResponse.json({ error: "帖子不存在" }, { status: 404 });
     }
 
-    return NextResponse.json(post);
+    return NextResponse.json(getVisiblePost(post, Boolean(session?.user)));
   } catch (error) {
     console.error("Error fetching post:", error);
     return NextResponse.json({ error: "获取帖子失败" }, { status: 500 });

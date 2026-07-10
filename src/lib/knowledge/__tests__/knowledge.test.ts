@@ -267,6 +267,22 @@ describe("classifyNeedsClarification", () => {
     }
   });
 
+  it("asks for a concrete object for bare attribute or action prompts", () => {
+    for (const question of ["营业时间", "地址", "预约", "费用"]) {
+      const result = classifyNeedsClarification(question);
+      expect(result?.needsClarification).toBe(true);
+      expect(result?.message).toContain("对象");
+      expect(result?.suggestions.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("asks for route context for transport questions without endpoints", () => {
+    const result = classifyNeedsClarification("校车和班车怎么坐");
+    expect(result?.needsClarification).toBe(true);
+    expect(result?.message).toContain("起点");
+    expect(result?.message).toContain("终点");
+  });
+
   it("asks for a concrete aspect for bare major or school prompts", () => {
     for (const question of ["人工智能", "商学院", "法学"]) {
       const result = classifyNeedsClarification(question);
@@ -280,6 +296,7 @@ describe("classifyNeedsClarification", () => {
     expect(classifyNeedsClarification("保研有什么要求")).toBeNull();
     expect(classifyNeedsClarification("饭卡丢了怎么办")).toBeNull();
     expect(classifyNeedsClarification("人工智能转专业有什么限制")).toBeNull();
+    expect(classifyNeedsClarification("鼓楼到浦口校车怎么坐")).toBeNull();
   });
 });
 

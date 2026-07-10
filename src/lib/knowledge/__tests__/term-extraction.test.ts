@@ -147,6 +147,24 @@ describe("extractRetrievalTerms", () => {
     expect(result.terms).not.toContain("通勤");
   });
 
+  it("keeps cross-campus service summary terms stable", async () => {
+    await expect(extractRetrievalTerms("南京大学所有校区外卖情况汇总")).resolves.toEqual(
+      expect.arrayContaining(["所有校区", "汇总", "外卖"]),
+    );
+    await expect(extractRetrievalTerms("各校区食堂情况对比")).resolves.toEqual(
+      expect.arrayContaining(["各校区", "对比", "食堂"]),
+    );
+  });
+
+  it("expands new-student reporting preparation wording", async () => {
+    const terms = await extractRetrievalTerms("新生报到要带什么");
+    expect(terms).toContain("报到");
+    expect(terms).toContain("报到准备");
+    expect(terms).toContain("报到材料");
+    expect(terms).toContain("证件");
+    expect(terms).toContain("物品");
+  });
+
   it("extracts visitor library-entry intent from colloquial wording", async () => {
     const terms = await extractRetrievalTerms("校外人员能进图书馆吗");
     expect(terms).toContain("校外人员");

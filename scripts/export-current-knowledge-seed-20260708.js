@@ -20,11 +20,20 @@ async function main() {
       sourceType: true,
       verificationStatus: true,
       verifiedAt: true,
+      updatedAt: true,
       domainTag: true,
       archivedAt: true,
       sourceUrls: true,
     },
   });
+
+  const normalizedCards = cards.map(({ updatedAt, ...card }) => ({
+    ...card,
+    verifiedAt:
+      card.verificationStatus === "VERIFIED"
+        ? card.verifiedAt || updatedAt
+        : card.verifiedAt,
+  }));
 
   const outDir = path.join(__dirname, "..", "prisma", "seed-data");
   fs.mkdirSync(outDir, { recursive: true });
@@ -34,12 +43,12 @@ async function main() {
     JSON.stringify({
       exportedAt: new Date().toISOString(),
       source: "current KnowledgeCard table",
-      count: cards.length,
-      cards,
+      count: normalizedCards.length,
+      cards: normalizedCards,
     }, null, 2),
     "utf8",
   );
-  console.log(JSON.stringify({ outFile, count: cards.length }, null, 2));
+  console.log(JSON.stringify({ outFile, count: normalizedCards.length }, null, 2));
 }
 
 main()

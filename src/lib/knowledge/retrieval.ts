@@ -16,6 +16,15 @@ import {
   RRF_K,
 } from "@/lib/knowledge/config";
 import type { RetrievalResult } from "@/lib/knowledge/types-internal";
+import {
+  CAMPUS_TERMS,
+  SERVICE_TOPICS,
+  detectCrossCampusServiceIntent,
+  detectServiceTopic,
+  textCoversServiceTopicAsMain,
+  textHasCrossCampusCoverage,
+  textCoversServiceTopic,
+} from "@/lib/knowledge/query-intent";
 
 // ---- Re-exports for backward compatibility ----
 export type { RetrievalCard, RetrievalResult } from "@/lib/knowledge/types-internal";
@@ -57,7 +66,7 @@ const TRANSFER_ACTION_TERMS = [
   "大二转",
 ];
 
-const LOCATION_TERMS = ["鼓楼", "仙林", "浦口", "苏州"];
+const LOCATION_TERMS: string[] = [...CAMPUS_TERMS];
 const RETRIEVAL_CARD_SELECT = {
   id: true,
   summary: true,
@@ -73,31 +82,9 @@ const RETRIEVAL_CARD_SELECT = {
   archivedAt: true,
 } satisfies Prisma.KnowledgeCardSelect;
 
-const LOCATION_SENSITIVE_SERVICE_TERMS = [
-  "洗衣",
-  "洗衣店",
-  "理发",
-  "理发店",
-  "剪头发",
-  "打印",
-  "打印店",
-  "快递",
-  "外卖",
-  "食堂",
-  "修车",
-  "自行车",
-  "修理",
-  "修理铺",
-  "浴室",
-  "洗浴",
-  "教超",
-  "教育超市",
-  "便利店",
-  "商铺",
-  "日用品",
-  "生活用品",
-  "日化用品",
-];
+const LOCATION_SENSITIVE_SERVICE_TERMS = Array.from(
+  new Set(SERVICE_TOPICS.flatMap((topic) => [...topic.queryTerms, ...topic.evidenceTerms])),
+);
 
 const WEAK_GATE_TERMS = new Set([
   "失败",
@@ -108,6 +95,11 @@ const WEAK_GATE_TERMS = new Set([
   "申请",
   "流程",
   "办理",
+  "预约",
+  "预约方式",
+  "咨询",
+  "咨询预约",
+  "中心",
   "相关",
   "信息",
   "问题",
@@ -128,6 +120,14 @@ const WEAK_GATE_TERMS = new Set([
   "求稳",
   "说法",
   "谢谢",
+  "所有",
+  "所有校区",
+  "各校区",
+  "全校区",
+  "每个校区",
+  "不同校区",
+  "汇总",
+  "对比",
 ]);
 
 function includesTerm(text: string, term: string) {
@@ -203,6 +203,16 @@ function cardMatchesKeywordGate(card: RetrievalResult["card"], gateTerms: string
   return gateTerms.some((term) => includesTerm(searchable, term));
 }
 
+function cardSearchText(card: RetrievalResult["card"]) {
+  return [
+    card.summary,
+    card.body,
+    card.sourceExcerpt ?? "",
+    card.sourceDescription,
+    card.domainTag,
+  ].join("\n");
+}
+
 function namesDifferentLocationContext(card: RetrievalResult["card"], terms: string[]) {
   const queryLocations = terms.filter((term) => LOCATION_TERMS.includes(term));
   if (queryLocations.length === 0) return false;
@@ -214,7 +224,8 @@ function namesDifferentLocationContext(card: RetrievalResult["card"], terms: str
   return !summaryLocations.some((term) => queryLocations.includes(term));
 }
 
-function namesLocationWithoutQueryContext(card: RetrievalResult["card"], terms: string[]) {
+function namesLocationWithoutQueryContext(card: RetrievalResult["card"], terms: string[], question: string) {
+  if (detectCrossCampusServiceIntent(question, terms)) return false;
   if (terms.some((term) => LOCATION_TERMS.includes(term))) return false;
   if (!terms.some((term) => LOCATION_SENSITIVE_SERVICE_TERMS.includes(term))) return false;
 
@@ -230,6 +241,28 @@ function isLocationNeutralServiceCard(card: RetrievalResult["card"], terms: stri
   const summary = card.summary.toLowerCase();
   return !LOCATION_TERMS.some((term) => summary.includes(term.toLowerCase())) &&
     LOCATION_SENSITIVE_SERVICE_TERMS.some((term) => summary.includes(term.toLowerCase()));
+}
+
+function missesQueryServiceTopic(card: RetrievalResult["card"], question: string, terms: string[]) {
+  const topic = detectServiceTopic(question, terms);
+  if (!topic) return false;
+  return !textCoversServiceTopic(cardSearchText(card), topic);
+}
+
+function coversQueryServiceTopic(card: RetrievalResult["card"], question: string, terms: string[]) {
+  const topic = detectServiceTopic(question, terms);
+  if (!topic) return false;
+  return textCoversServiceTopic(cardSearchText(card), topic);
+}
+
+function coversCrossCampusServiceIntent(card: RetrievalResult["card"], question: string, terms: string[]) {
+  const intent = detectCrossCampusServiceIntent(question, terms);
+  if (!intent) return false;
+
+  const titleText = `${card.summary}\n${card.domainTag}`;
+  const bodyText = `${card.body}\n${card.sourceExcerpt || ""}`;
+  return textCoversServiceTopicAsMain(titleText, bodyText, intent.topic) &&
+    textHasCrossCampusCoverage(titleText, cardSearchText(card));
 }
 
 function isTransferQuery(question: string, terms: string[]) {
@@ -289,16 +322,29 @@ function adjustContextualScore(
   terms: string[],
   matchedTerms: string[],
 ) {
+  const hasCrossCampusServiceIntent = Boolean(detectCrossCampusServiceIntent(question, terms));
+  if (hasCrossCampusServiceIntent && !coversCrossCampusServiceIntent(card, question, terms)) {
+    return 0;
+  }
+
+  if (missesQueryServiceTopic(card, question, terms)) {
+    return 0;
+  }
+
   if (namesDifferentLocationContext(card, terms)) {
     score = 0;
   }
 
-  if (namesLocationWithoutQueryContext(card, terms)) {
+  if (namesLocationWithoutQueryContext(card, terms, question)) {
     score = Math.max(0, score - 3);
   }
 
   if (isLocationNeutralServiceCard(card, terms)) {
     score += 8;
+  }
+
+  if (hasCrossCampusServiceIntent && coversQueryServiceTopic(card, question, terms)) {
+    score += 4;
   }
 
   if (isTransferQuery(question, terms)) {

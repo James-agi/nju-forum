@@ -1,0 +1,14 @@
+{
+  "name": "source-to-card-pipeline-kit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A portable, source-traceable knowledge card workflow demo.",
+  "scripts": {
+    "demo": "node src/cli.mjs demo",
+    "validate:demo": "node src/cli.mjs validate --run runs/demo"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

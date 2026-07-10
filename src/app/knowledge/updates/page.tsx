@@ -47,17 +47,18 @@ function getFilterHref(params: {
 export default async function KnowledgeUpdatesPage({
   searchParams,
 }: {
-  searchParams: {
+  searchParams: Promise<{
     page?: string | string[];
     type?: string | string[];
     domain?: string | string[];
-  };
+  }>;
 }) {
   await requireKnowledgePageUser();
 
-  const page = parsePage(searchParams.page);
-  const type = parseKind(searchParams.type);
-  const domain = parseDomain(searchParams.domain);
+  const resolvedSearchParams = await searchParams;
+  const page = parsePage(resolvedSearchParams.page);
+  const type = parseKind(resolvedSearchParams.type);
+  const domain = parseDomain(resolvedSearchParams.domain);
 
   return (
     <div className="container mx-auto max-w-6xl px-4 py-6">

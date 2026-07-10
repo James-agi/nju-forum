@@ -1,12 +1,12 @@
 # Reviewed Card Replay Snapshot 20260708
 
-This folder contains a replayable snapshot for the 324 cards covered by
-`scripts/temp-audit/result-*.json` after the July 8 audit fixes.
+This replay command uses the committed canonical seed containing all 665 cards,
+including the 324 cards covered by the July 8 audit fixes.
 
 ## Files
 
-- `scripts/temp-backups/reviewed-card-current-snapshot-20260708.json`
-  - Current database snapshot for the reviewed cards after fixes.
+- `prisma/seed-data/knowledge-cards-current.json`
+  - Committed canonical snapshot used by default.
 - `scripts/replay-reviewed-card-snapshot-20260708.js`
   - Replays the snapshot into the current database.
 
@@ -35,6 +35,8 @@ node "scripts/replay-reviewed-card-snapshot-20260708.js" --apply --include-archi
 
 - The script updates existing cards by `id`; it does not create missing cards.
 - It updates `summary`, `body`, `sourceExcerpt`, source metadata,
-  `verificationStatus`, `domainTag`, and `sourceUrls`.
+  `verificationStatus`, `verifiedAt`, `domainTag`, and `sourceUrls`.
+- For a legacy `VERIFIED` card without `verifiedAt`, the committed snapshot's
+  `exportedAt` is used as a deterministic restore timestamp.
 - It is intended as a safety net if seed data overwrites the audited database
   fixes. It is not a replacement for updating canonical seed files.

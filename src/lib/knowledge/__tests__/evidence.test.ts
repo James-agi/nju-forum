@@ -600,6 +600,227 @@ describe("evaluateEvidence", () => {
     expect(result.cards.map((item) => item.card.id)).toContain("pukou-repair");
   });
 
+  it("combines campus-specific takeout cards for cross-campus service summaries", () => {
+    const shared = ["外卖", "所有校区", "汇总"];
+    const result = evaluateEvidence([
+      makeResult({
+        question: "南京大学所有校区外卖情况汇总",
+        score: 5,
+        matchedTerms: ["外卖"],
+        queryTerms: shared,
+        originalQueryTerms: shared,
+        cardOverrides: {
+          id: "gulou-takeout",
+          summary: "鼓楼校区可以叫外卖吗？",
+          body: "鼓楼校区可以点外卖，按外卖柜和校门取餐规则处理。",
+        },
+      }),
+      makeResult({
+        question: "南京大学所有校区外卖情况汇总",
+        score: 5,
+        matchedTerms: ["外卖"],
+        queryTerms: shared,
+        originalQueryTerms: shared,
+        cardOverrides: {
+          id: "suzhou-takeout",
+          summary: "苏州校区可以点外卖吗？外卖送到哪里？",
+          body: "苏州校区外卖通常送到外卖柜或指定取餐点。",
+        },
+      }),
+      makeResult({
+        question: "南京大学所有校区外卖情况汇总",
+        score: 5,
+        matchedTerms: ["外卖"],
+        queryTerms: shared,
+        originalQueryTerms: shared,
+        cardOverrides: {
+          id: "pukou-takeout",
+          summary: "浦口校区外卖和外食指南",
+          body: "浦口校区外卖柜和周边外食选择需要按卡片说明取餐。",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.cards.map((card) => card.card.id)).toHaveLength(3);
+    expect(result.cards.map((card) => card.card.id)).toEqual(expect.arrayContaining([
+      "gulou-takeout",
+      "suzhou-takeout",
+      "pukou-takeout",
+    ]));
+  });
+
+  it("filters unrelated high-score cards in cross-campus food comparisons", () => {
+    const shared = ["各校区", "食堂", "对比", "情况"];
+    const result = evaluateEvidence([
+      makeResult({
+        question: "各校区食堂情况对比",
+        score: 15,
+        matchedTerms: ["各校区", "情况"],
+        queryTerms: shared,
+        originalQueryTerms: shared,
+        cardOverrides: {
+          id: "dorm-laundry",
+          summary: "宿舍洗衣、用电、门禁、入住和日常管理规则有哪些？",
+          body: "仙林宿舍一楼有洗衣机，宿舍日常管理按各校区规则执行。",
+        },
+      }),
+      makeResult({
+        question: "各校区食堂情况对比",
+        score: 6,
+        matchedTerms: ["食堂"],
+        queryTerms: shared,
+        originalQueryTerms: shared,
+        cardOverrides: {
+          id: "xianlin-gulou-food",
+          summary: "仙林和鼓楼食堂有哪些、味道怎么样？",
+          body: "仙林校区和鼓楼校区都有食堂，卡片整理食堂位置和口味。",
+        },
+      }),
+      makeResult({
+        question: "各校区食堂情况对比",
+        score: 6,
+        matchedTerms: ["食堂"],
+        queryTerms: shared,
+        originalQueryTerms: shared,
+        cardOverrides: {
+          id: "suzhou-food",
+          summary: "苏州校区食堂有哪些？价格和味道怎么样？",
+          body: "苏州校区食堂位置、价格和味道以卡片整理为准。",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.cards.map((card) => card.card.id)).toEqual(["xianlin-gulou-food", "suzhou-food"]);
+  });
+
+  it("does not treat dorm washing-machine cards as laundry-shop summaries", () => {
+    const shared = ["各校区", "洗衣店", "洗衣", "汇总"];
+    const result = evaluateEvidence([
+      makeResult({
+        question: "南大各校区洗衣店汇总",
+        score: 16,
+        matchedTerms: ["洗衣"],
+        queryTerms: shared,
+        originalQueryTerms: shared,
+        cardOverrides: {
+          id: "dorm-washer",
+          summary: "宿舍洗衣、用电、门禁、入住和日常管理规则有哪些？",
+          body: "仙林宿舍一楼有公共洗衣机，手机扫码支付。",
+        },
+      }),
+      makeResult({
+        question: "南大各校区洗衣店汇总",
+        score: 7,
+        matchedTerms: ["洗衣店", "洗衣"],
+        queryTerms: shared,
+        originalQueryTerms: shared,
+        cardOverrides: {
+          id: "gulou-laundry-shop",
+          summary: "鼓楼校区生活服务怎么用？（快递/洗衣/外卖/便利店/洗浴）",
+          body: "鼓楼校区校内和和平仓巷都有干洗、洗鞋等洗衣店服务。",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.cards.map((card) => card.card.id)).toEqual(["gulou-laundry-shop"]);
+  });
+
+  it("does not answer realtime open-status questions from generic dining cards", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "今天仙林食堂还开吗",
+        score: 13,
+        matchedTerms: ["仙林", "食堂"],
+        queryTerms: ["今天", "仙林", "食堂", "还开"],
+        originalQueryTerms: ["今天", "仙林", "食堂", "还开"],
+        cardOverrides: {
+          id: "xianlin-food",
+          summary: "仙林和鼓楼食堂有哪些、味道怎么样？",
+          body: "仙林校区有多个食堂，实际开放情况以现场为准。",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("does not answer realtime seat-availability questions from generic reservation rules", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "今天图书馆还有座位吗",
+        score: 17,
+        matchedTerms: ["图书馆", "座位"],
+        queryTerms: ["图书馆", "今天", "座位", "空位", "自习座位"],
+        originalQueryTerms: ["图书馆", "今天", "座位"],
+        cardOverrides: {
+          id: "library-seat-reservation",
+          summary: "南京大学图书馆座位怎么预约？",
+          body: "鼓楼图书馆没有座位预约系统；其他校区可通过南京大学APP、图书馆公众号或现场大屏选座。",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("does not answer named direct-action questions from incidental generic action terms", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "南大心理咨询中心怎么预约？",
+        score: 14,
+        matchedTerms: ["咨询", "中心", "预约", "心理咨询"],
+        queryTerms: ["南大心理", "咨询", "中心", "预约", "心理咨询中心", "预约方式", "心理咨询", "咨询预约"],
+        originalQueryTerms: ["南大心理", "咨询", "中心", "预约", "心理咨询中心", "预约方式", "心理咨询", "咨询预约"],
+        cardOverrides: {
+          id: "exam-deferral",
+          summary: "缓考怎么申请？什么时候最该找辅导员？",
+          body: "缓考申请要先联系辅导员咨询相关事项。心理压力很大时可以考虑联系辅导员或心理中心寻求支持；心理咨询相关安排以学校通知为准。",
+        },
+      }),
+      makeResult({
+        question: "南大心理咨询中心怎么预约？",
+        score: 10,
+        matchedTerms: ["中心", "预约"],
+        queryTerms: ["南大心理", "咨询", "中心", "预约", "心理咨询中心", "预约方式", "心理咨询", "咨询预约"],
+        originalQueryTerms: ["南大心理", "咨询", "中心", "预约", "心理咨询中心", "预约方式", "心理咨询", "咨询预约"],
+        cardOverrides: {
+          id: "sports-reservation",
+          summary: "仙林校区体育馆和运动场地怎么预约？",
+          body: "仙林运动场地统一在智慧场馆系统或南大 APP 预约。",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(false);
+    expect(result.reason).toBe("UNRELATED");
+  });
+
+  it("accepts new-student reporting preparation cards for bring-list questions", () => {
+    const result = evaluateEvidence([
+      makeResult({
+        question: "新生报到要带什么",
+        score: 8,
+        matchedTerms: ["报到", "准备", "材料"],
+        queryTerms: ["新生", "报到", "报到准备", "报到材料", "准备", "材料", "证件", "物品"],
+        originalQueryTerms: ["新生", "报到", "要带什么"],
+        cardOverrides: {
+          id: "freshman-reporting-prep",
+          summary: "新生报到前要准备什么？按什么顺序做？",
+          body: "报到前需要准备证件、材料和随身物品，并按迎新系统提示完成报到准备。",
+          domainTag: "新生入学",
+        },
+      }),
+    ]);
+
+    expect(result.sufficient).toBe(true);
+    expect(result.cards[0].card.id).toBe("freshman-reporting-prep");
+  });
+
   it("rejects related cards that do not directly answer physical library access", () => {
     const results = [
       makeResult({

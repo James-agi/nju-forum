@@ -1,0 +1,16 @@
+[
+  {
+    "action": "create",
+    "summary": "How do employees submit a service request?",
+    "body": "## What to prepare\nUse the service portal and choose the relevant request type.\n\n## Before submitting\nConfirm that the request is within the service team's published scope.\n\n## Status\nThe guide does not promise a response time, so follow the portal status instead of assuming a deadline.",
+    "sourceExcerpt": "Submit requests through the employee service portal. Select the appropriate request type and provide the required information. Service availability and response time depend on the request category.",
+    "sourceUrl": "https://docs.example.org/employee-service-guide",
+    "sourceUrls": [
+      "https://docs.example.org/employee-service-guide"
+    ],
+    "sourceDescription": "Example employee service guide used for the local demonstration.",
+    "sourceType": "OFFICIAL",
+    "domainTag": "Employee service",
+    "verificationStatus": "NEEDS_REVIEW"
+  }
+]

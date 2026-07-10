@@ -39,6 +39,10 @@ function waitForPort(port: number, timeoutMs = 30_000): Promise<void> {
 }
 
 export async function ensureServer(port?: number): Promise<number> {
+  if (process.env.NODE_ENV === "production" && process.env.ENABLE_OPENCODE_AGENT !== "1") {
+    throw new Error("OpenCode agent is disabled in production");
+  }
+
   if (state.ready && state.process && !state.process.killed) {
     return state.port;
   }
@@ -69,8 +73,8 @@ export async function ensureServer(port?: number): Promise<number> {
     process.platform === "win32" ? "opencode.cmd" : "opencode";
   // Use shell on Windows so .cmd files are resolved through PATH
   const child = spawn(
-    `${opencodeBin} serve --port ${actualPort}`,
-    [],
+    opencodeBin,
+    ["serve", "--port", String(actualPort)],
     {
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,

@@ -13,18 +13,19 @@ export const dynamic = "force-dynamic";
 const SECTION_DISCOVERY_POST_THRESHOLD = 12;
 
 interface SectionPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function SectionPage({ params }: SectionPageProps) {
+  const { id } = await params;
   const section = await db.section.findUnique({
-    where: { id: params.id },
+    where: { id },
   });
 
   if (!section) notFound();
 
   const posts = await db.post.findMany({
-    where: { sectionId: params.id },
+    where: { sectionId: id },
     orderBy: [{ pinned: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     include: {
       author: { select: { id: true, name: true, avatar: true } },
@@ -36,8 +37,8 @@ export default async function SectionPage({ params }: SectionPageProps) {
   const totalReplies = posts.reduce((sum, post) => sum + post._count.replies, 0);
   const { activePosts, hotPosts } = await getForumDiscoveryPosts({
     enabled: posts.length >= SECTION_DISCOVERY_POST_THRESHOLD,
-    where: { sectionId: params.id },
-    scope: { sectionId: params.id },
+    where: { sectionId: id },
+    scope: { sectionId: id },
   });
 
   return (

@@ -6,9 +6,14 @@ import {
   normalizePostContentFormat,
 } from "@/lib/forum/content-format";
 import { recomputePostMetrics } from "@/lib/forum/post-metrics";
+import { getVisiblePost } from "@/lib/forum/post-visibility";
 
 const MAX_POST_IMAGES = 6;
 const MAX_TAGS = 10;
+const MAX_TITLE_LENGTH = 100;
+const MAX_CONTENT_LENGTH = 50_000;
+const MAX_TAG_LENGTH = 30;
+const MAX_ID_LENGTH = 64;
 const FORUM_IMAGE_PATTERN = /^\/forum-images\/[A-Za-z0-9._~/%-]+$/;
 
 function normalizeImages(value: unknown) {
@@ -27,16 +32,18 @@ function normalizeTags(value: unknown) {
   return Array.from(new Set(value))
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
-    .filter(Boolean)
+    .filter((tag) => tag.length > 0 && tag.length <= MAX_TAG_LENGTH)
     .slice(0, MAX_TAGS);
 }
 
 export async function GET(req: Request) {
   try {
+    const session = await getSession();
     const { searchParams } = new URL(req.url);
     const sectionId = searchParams.get("sectionId");
     const sort = searchParams.get("sort") || "latest";
-    const page = parseInt(searchParams.get("page") || "1");
+    const requestedPage = Number.parseInt(searchParams.get("page") || "1", 10);
+    const page = Number.isFinite(requestedPage) ? Math.max(1, Math.min(requestedPage, 10_000)) : 1;
     const limit = 20;
     const skip = (page - 1) * limit;
 
@@ -71,7 +78,7 @@ export async function GET(req: Request) {
     ]);
 
     return NextResponse.json({
-      posts,
+      posts: posts.map((post) => getVisiblePost(post, Boolean(session?.user))),
       pagination: {
         page,
         limit,
@@ -108,6 +115,14 @@ export async function POST(req: Request) {
 
     if (!normalizedTitle || !normalizedSectionId || (!normalizedContent.trim() && images.length === 0)) {
       return NextResponse.json({ error: "请填写标题、分区，并输入内容或添加图片" }, { status: 400 });
+    }
+
+    if (
+      normalizedTitle.length > MAX_TITLE_LENGTH ||
+      normalizedContent.length > MAX_CONTENT_LENGTH ||
+      normalizedSectionId.length > MAX_ID_LENGTH
+    ) {
+      return NextResponse.json({ error: "标题、正文或分区参数过长" }, { status: 400 });
     }
 
     const section = await db.section.findUnique({ where: { id: normalizedSectionId } });

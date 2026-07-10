@@ -30,15 +30,18 @@ const VIEW_HINT: Record<string, string> = {
 export default async function ForumPage({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
   const session = await auth();
   const isLoggedIn = !!session?.user;
-  const view = ["list", "card", "tag", "topic"].includes(searchParams.view ?? "")
-    ? (searchParams.view as string)
+  const resolvedSearchParams = await searchParams;
+  const view = ["list", "card", "tag", "topic"].includes(
+    resolvedSearchParams.view ?? ""
+  )
+    ? (resolvedSearchParams.view as string)
     : "list";
-  const activeTag = searchParams.tag;
-  const activeTopic = searchParams.topic;
+  const activeTag = resolvedSearchParams.tag;
+  const activeTopic = resolvedSearchParams.topic;
 
   const sections = await db.section.findMany({
     orderBy: { order: "asc" },

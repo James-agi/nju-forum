@@ -3,6 +3,10 @@ import { hash } from "bcryptjs";
 import { db } from "@/lib/db";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LENGTH = 10;
+const MAX_PASSWORD_LENGTH = 128;
+
+class InvalidVerificationCodeError extends Error {}
 
 export async function POST(req: Request) {
   try {
@@ -18,7 +22,7 @@ export async function POST(req: Request) {
     const email = rawEmail.trim().toLowerCase();
     const name = rawName.trim();
 
-    if (!EMAIL_PATTERN.test(email)) {
+    if (!EMAIL_PATTERN.test(email) || email.length > 254) {
       return NextResponse.json({ error: "请输入有效的邮箱地址" }, { status: 400 });
     }
 
@@ -26,16 +30,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "昵称长度需在 2-20 字符之间" }, { status: 400 });
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: "密码至少6位" }, { status: 400 });
-    }
-
-    const existingUser = await db.user.findUnique({
-      where: { email },
-    });
-
-    if (existingUser) {
-      return NextResponse.json({ error: "该邮箱已注册" }, { status: 400 });
+    if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
+      return NextResponse.json({ error: "密码长度需为 10-128 位" }, { status: 400 });
     }
 
     const record = await db.verificationCode.findFirst({
@@ -54,10 +50,10 @@ export async function POST(req: Request) {
 
     if (record.code !== verificationCode.trim()) {
       const newAttempts = record.attempts + 1;
-      await db.verificationCode.update({
-        where: { id: record.id },
+      await db.verificationCode.updateMany({
+        where: { id: record.id, used: false, attempts: record.attempts },
         data: {
-          attempts: newAttempts,
+          attempts: { increment: 1 },
           ...(newAttempts >= 5 ? { used: true } : {}),
         },
       });
@@ -67,10 +63,18 @@ export async function POST(req: Request) {
     const hashedPassword = await hash(password, 12);
 
     const user = await db.$transaction(async (tx) => {
-      await tx.verificationCode.update({
-        where: { id: record.id },
+      const claimed = await tx.verificationCode.updateMany({
+        where: {
+          id: record.id,
+          email,
+          code: verificationCode.trim(),
+          used: false,
+          expiresAt: { gt: new Date() },
+          attempts: { lt: 5 },
+        },
         data: { used: true },
       });
+      if (claimed.count !== 1) throw new InvalidVerificationCodeError();
 
       return tx.user.create({
         data: {
@@ -86,6 +90,9 @@ export async function POST(req: Request) {
       user: { id: user.id, email: user.email, name: user.name },
     });
   } catch (error) {
+    if (error instanceof InvalidVerificationCodeError || (error as { code?: string }).code === "P2002") {
+      return NextResponse.json({ error: "验证码错误、已过期或邮箱不可用" }, { status: 400 });
+    }
     console.error("Registration error:", error);
     return NextResponse.json({ error: "注册失败，请稍后再试" }, { status: 500 });
   }

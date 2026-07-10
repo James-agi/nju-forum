@@ -1,21 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth-utils";
+import { detectImageType } from "@/lib/security/file-signatures";
+import { assertDirectoryQuota, getStorageNamespace } from "@/lib/security/storage-quota";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
-
-const ALLOWED_IMAGE_TYPES = new Map([
-  ["image/jpeg", "jpg"],
-  ["image/png", "png"],
-  ["image/webp", "webp"],
-  ["image/avif", "avif"],
-]);
+const MAX_USER_AVATAR_BYTES = 10 * 1024 * 1024;
 
 function fail(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -39,10 +35,6 @@ export async function POST(req: Request) {
       return fail("请选择要上传的头像");
     }
 
-    const extension = ALLOWED_IMAGE_TYPES.get(file.type);
-    if (!extension) {
-      return fail("只支持 jpg/png/webp/avif 图片");
-    }
     if (file.size > MAX_AVATAR_BYTES) {
       return fail("头像不能超过 2MB");
     }
@@ -52,15 +44,39 @@ export async function POST(req: Request) {
       return fail("头像不能超过 2MB");
     }
 
-    const avatarDir = path.join(process.cwd(), "public", "avatars");
-    await mkdir(avatarDir, { recursive: true });
+    const detected = detectImageType(buffer);
+    if (!detected || detected.extension === "gif") {
+      return fail("文件内容不是受支持的 jpg/png/webp/avif 图片");
+    }
 
-    const filename = `${Date.now()}-${randomUUID()}.${extension}`;
+    const namespace = getStorageNamespace(user.id);
+    const avatarDir = path.join(process.cwd(), "public", "avatars", namespace);
+    await mkdir(avatarDir, { recursive: true });
+    try {
+      await assertDirectoryQuota(avatarDir, buffer.byteLength, MAX_USER_AVATAR_BYTES);
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : "上传空间已达到上限", 413);
+    }
+
+    const filename = `${Date.now()}-${randomUUID()}.${detected.extension}`;
     const filePath = path.join(avatarDir, filename);
     await writeFile(filePath, buffer, { flag: "wx" });
 
-    const url = `/avatars/${filename}`;
-    await db.user.update({ where: { id: user.id }, data: { avatar: url } });
+    const url = `/avatars/${namespace}/${filename}`;
+    try {
+      await db.user.update({ where: { id: user.id }, data: { avatar: url } });
+    } catch (error) {
+      await unlink(filePath).catch(() => undefined);
+      throw error;
+    }
+
+    const previousPrefix = `/avatars/${namespace}/`;
+    if (user.avatar?.startsWith(previousPrefix) && user.avatar !== url) {
+      const previousName = user.avatar.slice(previousPrefix.length);
+      if (/^[A-Za-z0-9._-]+$/.test(previousName)) {
+        await unlink(path.join(avatarDir, previousName)).catch(() => undefined);
+      }
+    }
 
     return NextResponse.json({ url });
   } catch (error) {

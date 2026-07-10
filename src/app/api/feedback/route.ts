@@ -1,6 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth-utils";
@@ -10,39 +7,14 @@ import {
   websiteFeedbackSchema,
 } from "@/lib/feedback/validation";
 import { formatValidationError } from "@/lib/knowledge/validation";
+import {
+  removeMaterialFiles,
+  saveMaterialFiles,
+  type SavedMaterialFile,
+} from "@/lib/feedback/material-storage";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const MAX_MATERIAL_BYTES = 20 * 1024 * 1024;
-const MAX_MATERIAL_FILES = 3;
-
-const ALLOWED_MATERIAL_EXTENSIONS = new Set([
-  ".pdf",
-  ".doc",
-  ".docx",
-  ".ppt",
-  ".pptx",
-  ".xls",
-  ".xlsx",
-  ".txt",
-  ".md",
-  ".csv",
-  ".jpg",
-  ".jpeg",
-  ".png",
-  ".webp",
-  ".zip",
-]);
-
-type SavedMaterialFile = {
-  originalName: string;
-  filename: string;
-  filePath: string;
-  bytes: number;
-  contentType: string;
-  downloadUrl: string;
-};
 
 function fail(message: string, status = 400) {
   return NextResponse.json({ error: message }, { status });
@@ -54,56 +26,10 @@ function getFiles(formData: FormData) {
     .filter((value): value is File => value instanceof File && value.size > 0);
 }
 
-function cleanOriginalName(name: string) {
-  return name.replace(/[\\/:*?"<>|]/g, "_").trim().slice(0, 120) || "资料文件";
-}
-
 function formatBytes(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
   if (bytes >= 1024) return `${Math.ceil(bytes / 1024)}KB`;
   return `${bytes}B`;
-}
-
-async function saveMaterialFiles(files: File[]) {
-  if (files.length > MAX_MATERIAL_FILES) {
-    throw new Error(`一次最多上传 ${MAX_MATERIAL_FILES} 个文件`);
-  }
-
-  const materialDir = path.join(process.cwd(), "storage", "feedback-materials");
-  await mkdir(materialDir, { recursive: true });
-
-  const savedFiles: SavedMaterialFile[] = [];
-
-  for (const file of files) {
-    const extension = path.extname(file.name).toLowerCase();
-    if (!ALLOWED_MATERIAL_EXTENSIONS.has(extension)) {
-      throw new Error("只支持 PDF、Office、文本、图片或 zip 资料文件");
-    }
-
-    if (file.size > MAX_MATERIAL_BYTES) {
-      throw new Error("单个资料文件不能超过 20MB");
-    }
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    if (buffer.byteLength > MAX_MATERIAL_BYTES) {
-      throw new Error("单个资料文件不能超过 20MB");
-    }
-
-    const filename = `${Date.now()}-${randomUUID()}${extension}`;
-    const filePath = path.join(materialDir, filename);
-    await writeFile(filePath, buffer, { flag: "wx" });
-
-    savedFiles.push({
-      originalName: cleanOriginalName(file.name),
-      filename,
-      filePath,
-      bytes: buffer.byteLength,
-      contentType: file.type || "application/octet-stream",
-      downloadUrl: `/api/admin/feedback/materials/${filename}`,
-    });
-  }
-
-  return savedFiles;
 }
 
 async function getActiveUser() {
@@ -164,9 +90,9 @@ async function createMaterialFeedback(req: Request, userId: string) {
     return fail("请至少填写资料链接、上传文件或补充说明");
   }
 
-  let savedFiles;
+  let savedFiles: SavedMaterialFile[];
   try {
-    savedFiles = await saveMaterialFiles(files);
+    savedFiles = await saveMaterialFiles(files, userId);
   } catch (error) {
     return fail(error instanceof Error ? error.message : "资料文件上传失败");
   }
@@ -208,7 +134,7 @@ async function createMaterialFeedback(req: Request, userId: string) {
       },
     });
   } catch (error) {
-    await Promise.allSettled(savedFiles.map((file) => unlink(file.filePath)));
+    await removeMaterialFiles(savedFiles);
     throw error;
   }
 

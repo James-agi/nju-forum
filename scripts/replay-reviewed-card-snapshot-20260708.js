@@ -7,7 +7,7 @@ const { PrismaClient } = require("@prisma/client");
 
 const prisma = new PrismaClient();
 
-const DEFAULT_SNAPSHOT = path.join(__dirname, "temp-backups", "reviewed-card-current-snapshot-20260708.json");
+const DEFAULT_SNAPSHOT = path.join(__dirname, "..", "prisma", "seed-data", "knowledge-cards-current.json");
 
 function parseArgs() {
   const args = new Set(process.argv.slice(2));
@@ -20,7 +20,16 @@ function parseArgs() {
 }
 
 function compact(value) {
+  if (value instanceof Date) return value.toISOString();
   return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function restoredVerifiedAt(card, exportedAt, currentVerifiedAt) {
+  if (card.verifiedAt) return new Date(card.verifiedAt);
+  if (card.updatedAt) return new Date(card.updatedAt);
+  if (currentVerifiedAt) return currentVerifiedAt;
+  if (card.verificationStatus === "VERIFIED") return new Date(exportedAt);
+  return null;
 }
 
 async function main() {
@@ -43,6 +52,7 @@ async function main() {
       sourceDescription: true,
       sourceType: true,
       verificationStatus: true,
+      verifiedAt: true,
       domainTag: true,
       archivedAt: true,
       sourceUrls: true,
@@ -73,6 +83,7 @@ async function main() {
       sourceDescription: card.sourceDescription,
       sourceType: card.sourceType,
       verificationStatus: card.verificationStatus,
+      verifiedAt: restoredVerifiedAt(card, snapshot.exportedAt, current.verifiedAt),
       domainTag: card.domainTag,
       sourceUrls: card.sourceUrls,
     };

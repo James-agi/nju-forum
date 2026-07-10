@@ -10,12 +10,13 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authz = await requireKnowledgeAuthor();
     if (!authz.ok) return authz.response;
 
+    const { id } = await params;
     const payload = await req.json();
     const parsed = gapUpdateSchema.safeParse(payload);
     if (!parsed.success) {
@@ -26,7 +27,7 @@ export async function PATCH(
     }
 
     const existingGap = await db.knowledgeGap.findUnique({
-      where: { id: params.id },
+      where: { id },
     });
 
     if (!existingGap) {
@@ -47,7 +48,7 @@ export async function PATCH(
         where: {
           linkedCardId: parsed.data.linkedCardId,
           status: "HANDLED",
-          id: { not: params.id },
+          id: { not: id },
         },
         select: { id: true },
       });
@@ -61,7 +62,7 @@ export async function PATCH(
     }
 
     if (parsed.data.status === "DUPLICATE") {
-      if (parsed.data.duplicateOfId === params.id) {
+      if (parsed.data.duplicateOfId === id) {
         return NextResponse.json({ error: "不能把缺口标记为自身重复" }, { status: 400 });
       }
 
@@ -99,7 +100,7 @@ export async function PATCH(
     }
 
     const gap = await db.knowledgeGap.update({
-      where: { id: params.id },
+      where: { id },
       data,
       include: {
         linkedCard: { select: { summary: true } },

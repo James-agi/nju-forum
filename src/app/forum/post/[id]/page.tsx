@@ -21,7 +21,7 @@ import { recordPostView } from "@/lib/forum/post-metrics";
 export const dynamic = "force-dynamic";
 
 interface PostPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 const SITE_NAME = "知南 - NJU Know";
@@ -60,8 +60,9 @@ function getShareImageUrls(images: string[]) {
 }
 
 export async function generateMetadata({ params }: PostPageProps): Promise<Metadata> {
+  const { id } = await params;
   const post = await db.post.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: {
       id: true,
       title: true,
@@ -117,9 +118,10 @@ export async function generateMetadata({ params }: PostPageProps): Promise<Metad
 
 export default async function PostPage({ params }: PostPageProps) {
   const session = await getSession();
+  const { id } = await params;
 
   const post = await db.post.findUnique({
-    where: { id: params.id },
+    where: { id },
     include: {
       author: { select: { id: true, name: true, avatar: true, createdAt: true } },
       section: { select: { id: true, name: true, icon: true } },
@@ -130,13 +132,13 @@ export default async function PostPage({ params }: PostPageProps) {
 
   if (!post) notFound();
 
-  await recordPostView(params.id);
+  await recordPostView(id);
 
   const contentFormat = getStoredPostContentFormat(post.content);
   const displayViewCount = post.viewCount + 1;
 
   const replies = await db.reply.findMany({
-    where: { postId: params.id, parentId: null },
+    where: { postId: id, parentId: null },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     include: {
       author: { select: { id: true, name: true, avatar: true } },
@@ -158,7 +160,7 @@ export default async function PostPage({ params }: PostPageProps) {
   let isFavorited = false;
   if (session?.user) {
     const fav = await db.favorite.findUnique({
-      where: { userId_postId: { userId: session.user.id, postId: params.id } },
+      where: { userId_postId: { userId: session.user.id, postId: id } },
     });
     isFavorited = !!fav;
   }

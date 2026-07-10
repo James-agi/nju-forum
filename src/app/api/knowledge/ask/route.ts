@@ -19,6 +19,7 @@ import { TraceBuilder } from "@/lib/knowledge/trace";
 import { getOrCreateConversation, getConversationHistory } from "@/lib/knowledge/conversation";
 import { answerCache } from "@/lib/knowledge/cache";
 import { tryAcquireAskSlot, type AskConcurrencyBusyReason } from "@/lib/knowledge/concurrency";
+import { getTrustedClientIp } from "@/lib/security/request-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -118,7 +119,7 @@ export async function POST(req: Request) {
     if (!authz.ok) return authz.response;
 
     const headersList = await headers();
-    const ip = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const ip = getTrustedClientIp(headersList);
     const rateCheck = checkRateLimit(ip, authz.user?.id ?? null);
     if (!rateCheck.allowed) {
       return NextResponse.json(

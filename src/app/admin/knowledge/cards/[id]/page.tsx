@@ -5,7 +5,8 @@ export const dynamic = "force-dynamic";
 export default async function KnowledgeCardDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
-  redirect(`/knowledge/cards/${params.id}`);
+  const { id } = await params;
+  redirect(`/knowledge/cards/${id}`);
 }

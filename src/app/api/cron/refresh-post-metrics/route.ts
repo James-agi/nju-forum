@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { refreshAllPostMetrics } from "@/lib/forum/post-metrics";
 
@@ -15,6 +16,14 @@ function getBearerToken(req: Request) {
   return token;
 }
 
+function hasValidCronToken(provided: string | null, expected: string) {
+  if (!provided) return false;
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+  return providedBuffer.length === expectedBuffer.length &&
+    timingSafeEqual(providedBuffer, expectedBuffer);
+}
+
 export async function POST(req: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
@@ -25,7 +34,7 @@ export async function POST(req: Request) {
     );
   }
 
-  if (getBearerToken(req) !== cronSecret) {
+  if (!hasValidCronToken(getBearerToken(req), cronSecret)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

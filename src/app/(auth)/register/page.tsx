@@ -87,6 +87,11 @@ export default function RegisterPage() {
       return;
     }
 
+    if (form.password.length < 10 || form.password.length > 128) {
+      setError("密码长度需为 10-128 位");
+      return;
+    }
+
     if (!isValidEmail(form.email)) {
       setError("请输入有效的邮箱地址");
       return;
@@ -152,6 +157,7 @@ export default function RegisterPage() {
                   placeholder="you@example.com"
                   value={form.email}
                   onChange={handleChange}
+                  maxLength={254}
                   required
                 />
                 <Button
@@ -174,6 +180,9 @@ export default function RegisterPage() {
                   placeholder="输入 6 位验证码"
                   value={form.verificationCode}
                   onChange={handleChange}
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
                   required
                 />
               </div>
@@ -187,6 +196,8 @@ export default function RegisterPage() {
                 placeholder="2-20个字符"
                 value={form.name}
                 onChange={handleChange}
+                minLength={2}
+                maxLength={20}
                 required
               />
             </div>
@@ -196,9 +207,11 @@ export default function RegisterPage() {
                 id="password"
                 name="password"
                 type="password"
-                placeholder="至少6位"
+                placeholder="10-128 位"
                 value={form.password}
                 onChange={handleChange}
+                minLength={10}
+                maxLength={128}
                 required
               />
             </div>
@@ -211,6 +224,8 @@ export default function RegisterPage() {
                 placeholder="再次输入密码"
                 value={form.confirmPassword}
                 onChange={handleChange}
+                minLength={10}
+                maxLength={128}
                 required
               />
             </div>

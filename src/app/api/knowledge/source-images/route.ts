@@ -1,11 +1,17 @@
 import { createHash } from "node:crypto";
-import { lookup } from "node:dns/promises";
+import { request as httpRequest, type IncomingMessage } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { mkdir, writeFile } from "node:fs/promises";
-import { isIP } from "node:net";
 import path from "node:path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireKnowledgeAuthor } from "@/lib/knowledge/authz";
+import { detectImageType } from "@/lib/security/file-signatures";
+import {
+  createPinnedLookup,
+  resolvePublicUrl,
+  type PublicAddress,
+} from "@/lib/security/remote-url";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -76,89 +82,68 @@ function parseHttpUrl(value: string, name = "URL") {
   return url;
 }
 
-function isPrivateIpv4(ip: string) {
-  const parts = ip.split(".").map((part) => Number.parseInt(part, 10));
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) return true;
-
-  const [a, b] = parts;
-  return (
-    a === 0 ||
-    a === 10 ||
-    a === 127 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    (a === 192 && b === 0) ||
-    (a === 198 && (b === 18 || b === 19)) ||
-    a >= 224
-  );
-}
-
-function isPrivateIpv6(ip: string) {
-  const normalized = ip.toLowerCase();
-  return (
-    normalized === "::1" ||
-    normalized === "::" ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("fe80:") ||
-    normalized.startsWith("::ffff:127.") ||
-    normalized.startsWith("::ffff:10.") ||
-    normalized.startsWith("::ffff:192.168.")
-  );
-}
-
-function isPrivateAddress(address: string) {
-  const version = isIP(address);
-  if (version === 4) return isPrivateIpv4(address);
-  if (version === 6) return isPrivateIpv6(address);
-  return true;
-}
-
 async function validateRemoteUrl(url: URL) {
-  if (url.protocol !== "http:" && url.protocol !== "https:") {
-    throw new SourceImageError("URL 只支持 http/https");
+  try {
+    return await resolvePublicUrl(url);
+  } catch (error) {
+    throw new SourceImageError(
+      error instanceof Error ? error.message : "不支持该远程地址"
+    );
   }
+}
 
-  const hostname = url.hostname.toLowerCase();
-  if (hostname === "localhost" || hostname.endsWith(".localhost")) {
-    throw new SourceImageError("不支持 localhost 或内网地址");
-  }
+type PinnedResponse = {
+  status: number;
+  ok: boolean;
+  headers: Headers;
+  body: IncomingMessage;
+};
 
-  if (isIP(hostname)) {
-    if (isPrivateAddress(hostname)) {
-      throw new SourceImageError("不支持 localhost 或内网地址");
-    }
-    return;
-  }
-
-  const addresses = await lookup(hostname, { all: true });
-  if (addresses.length === 0 || addresses.some((item) => isPrivateAddress(item.address))) {
-    throw new SourceImageError("不支持 localhost 或内网地址");
-  }
+function requestPinned(url: URL, init: RequestInit, resolved: PublicAddress) {
+  return new Promise<PinnedResponse>((resolve, reject) => {
+    const request = url.protocol === "https:" ? httpsRequest : httpRequest;
+    const requestHeaders = Object.fromEntries(new Headers(init.headers).entries());
+    const req = request(
+      url,
+      {
+        method: init.method ?? "GET",
+        headers: requestHeaders,
+        lookup: createPinnedLookup(resolved),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      },
+      (response) => {
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(response.headers)) {
+          if (Array.isArray(value)) value.forEach((item) => headers.append(name, item));
+          else if (value !== undefined) headers.set(name, value);
+        }
+        const status = response.statusCode ?? 0;
+        resolve({ status, ok: status >= 200 && status < 300, headers, body: response });
+      }
+    );
+    req.on("error", reject);
+    req.end();
+  });
 }
 
 async function fetchValidated(
   url: URL,
   init: RequestInit,
   redirectCount = 0
-): Promise<{ response: Response; finalUrl: URL }> {
+): Promise<{ response: PinnedResponse; finalUrl: URL }> {
   if (redirectCount > MAX_REDIRECTS) {
     throw new SourceImageError("URL 重定向次数过多");
   }
 
-  await validateRemoteUrl(url);
-
-  const response = await fetch(url, {
-    ...init,
-    redirect: "manual",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    headers: {
-      "User-Agent": USER_AGENT,
-      ...(init.headers ?? {}),
+  const resolved = await validateRemoteUrl(url);
+  const response = await requestPinned(
+    url,
+    {
+      ...init,
+      headers: { "User-Agent": USER_AGENT, ...(init.headers ?? {}) },
     },
-  });
+    resolved
+  );
 
   if (
     response.status >= 300 &&
@@ -166,14 +151,14 @@ async function fetchValidated(
     response.headers.has("location")
   ) {
     const nextUrl = new URL(response.headers.get("location")!, url);
-    response.body?.cancel();
+    response.body.destroy();
     return fetchValidated(nextUrl, init, redirectCount + 1);
   }
 
   return { response, finalUrl: url };
 }
 
-function getNormalizedContentType(response: Response) {
+function getNormalizedContentType(response: PinnedResponse) {
   return response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
 }
 
@@ -187,7 +172,7 @@ async function probeDirectImage(url: URL): Promise<ImageCandidate | null> {
     try {
       const { response, finalUrl } = await fetchValidated(url, init);
       const contentType = getNormalizedContentType(response);
-      response.body?.cancel();
+      response.body.destroy();
 
       if (response.ok && ALLOWED_IMAGE_TYPES.has(contentType)) {
         return {
@@ -225,6 +210,9 @@ function cleanDimension(value: unknown) {
 }
 
 async function extractPageImageCandidates(url: URL): Promise<ImageCandidate[]> {
+  if (process.env.NODE_ENV === "production" && process.env.ENABLE_KNOWLEDGE_PAGE_PREVIEW !== "1") {
+    throw new SourceImageError("生产环境已禁用任意网页图片预览", 403);
+  }
   await validateRemoteUrl(url);
 
   const { chromium } = await import("playwright");
@@ -338,24 +326,18 @@ async function extractPageImageCandidates(url: URL): Promise<ImageCandidate[]> {
   }
 }
 
-async function readBodyLimited(response: Response) {
-  const reader = response.body?.getReader();
-  if (!reader) throw new SourceImageError("图片响应为空");
-
+async function readBodyLimited(response: PinnedResponse) {
   const chunks: Uint8Array[] = [];
   let total = 0;
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (!value) continue;
-
-    total += value.byteLength;
+  for await (const value of response.body) {
+    const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
+    total += chunk.byteLength;
     if (total > MAX_IMAGE_BYTES) {
-      await reader.cancel();
+      response.body.destroy();
       throw new SourceImageError("单张图片不能超过 5MB");
     }
-    chunks.push(value);
+    chunks.push(chunk);
   }
 
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
@@ -366,26 +348,30 @@ async function downloadImage(value: string) {
   const { response, finalUrl } = await fetchValidated(url, { method: "GET" });
 
   if (!response.ok) {
-    response.body?.cancel();
+    response.body.destroy();
     throw new SourceImageError("图片下载失败", response.status >= 500 ? 502 : 400);
   }
 
   const contentType = getNormalizedContentType(response);
   const extension = ALLOWED_IMAGE_TYPES.get(contentType);
   if (!extension) {
-    response.body?.cancel();
+    response.body.destroy();
     throw new SourceImageError("只支持 jpg/png/webp/gif/avif 图片");
   }
 
   const contentLength = Number.parseInt(response.headers.get("content-length") ?? "", 10);
   if (Number.isFinite(contentLength) && contentLength > MAX_IMAGE_BYTES) {
-    response.body?.cancel();
+    response.body.destroy();
     throw new SourceImageError("单张图片不能超过 5MB");
   }
 
   const buffer = await readBodyLimited(response);
+  const detected = detectImageType(buffer);
+  if (!detected || detected.contentType !== contentType) {
+    throw new SourceImageError("图片响应类型与实际文件内容不一致");
+  }
   const hash = createHash("sha256").update(buffer).digest("hex").slice(0, 16);
-  const filename = `${Date.now()}-${hash}.${extension}`;
+  const filename = `${Date.now()}-${hash}.${detected.extension}`;
   const imageDir = path.join(process.cwd(), "public", "knowledge-images");
   const filePath = path.join(imageDir, filename);
 

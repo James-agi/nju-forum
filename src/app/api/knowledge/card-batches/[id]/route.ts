@@ -24,13 +24,14 @@ async function readOptionalJson(file: string) {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authz = await requireKnowledgeAuthor();
     if (!authz.ok) return authz.response;
 
-    const batch = await readCardBatch(decodeURIComponent(params.id));
+    const { id } = await params;
+    const batch = await readCardBatch(decodeURIComponent(id));
     const runStatus = await readWebRunStatus(batch.id);
     const jobs = await Promise.all(
       batch.jobs.map(async (job) => ({

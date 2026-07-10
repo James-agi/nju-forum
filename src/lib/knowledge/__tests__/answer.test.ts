@@ -114,12 +114,15 @@ describe("buildCardBoundedAnswer", () => {
           },
         ],
       },
-      citations: [{ cardId: "card-1", claimText: "转专业前先确认目标专业准入条件" }],
+      citations: [{
+        cardId: "card-1",
+        claimText: "转专业前先确认目标专业准入条件并评估分流影响；目标专业可能限制年级或大类；先读目标院系当年转专业通知",
+      }],
     }));
 
     const result = makeResult();
     result.card.summary = "转专业前需要确认什么";
-    result.card.body = "转专业前先确认目标专业准入条件，再评估分流影响。目标专业可能限制年级或大类。";
+    result.card.body = "转专业前先确认目标专业准入条件，再评估分流影响。目标专业可能限制年级或大类。下一步先读目标院系当年转专业通知。";
     result.matchedTerms = ["转专业", "准入条件", "分流"];
 
     const answer = await buildCardBoundedAnswer("转专业前要确认什么", [result]);
@@ -127,6 +130,47 @@ describe("buildCardBoundedAnswer", () => {
     expect(answer.answerMode).toBe("LLM");
     expect(answer.structuredAnswer?.shape).toBe("policy");
     expect(answer.structuredAnswer?.blocks.map((block) => block.role)).toEqual(["requirement", "action"]);
+  });
+
+  it("falls back when an answer introduces a number absent from the cited evidence", async () => {
+    vi.mocked(answerCompletion).mockResolvedValueOnce(JSON.stringify({
+      answer: "鼓楼到浦口的班车每 15 分钟一班。",
+      citations: [{ cardId: "card-1", claimText: "鼓楼到浦口的班车每 15 分钟一班" }],
+    }));
+
+    const answer = await buildCardBoundedAnswer("鼓楼到浦口班车多久一班", [makeResult()]);
+
+    expect(answer.answerMode).toBe("FALLBACK");
+    expect(answer.fallbackReason).toBe("VALIDATION_FAILED");
+    expect(answer.answerText).not.toContain("15 分钟");
+  });
+
+  it("does not treat a longer evidence number as support for a shorter answer number", async () => {
+    vi.mocked(answerCompletion).mockResolvedValueOnce(JSON.stringify({
+      answer: "这项要求是 1 学分。",
+      citations: [{ cardId: "card-1", claimText: "这项要求是 1 学分" }],
+    }));
+    const result = makeResult();
+    result.card.summary = "通识课学分要求";
+    result.card.body = "通识课总学分要求是 11 学分。";
+
+    const answer = await buildCardBoundedAnswer("这项要求是多少学分", [result]);
+
+    expect(answer.answerMode).toBe("FALLBACK");
+    expect(answer.fallbackReason).toBe("VALIDATION_FAILED");
+  });
+
+  it("falls back when claimText is not supported by its cited card", async () => {
+    vi.mocked(answerCompletion).mockResolvedValueOnce(JSON.stringify({
+      answer: "鼓楼到浦口的班车需要提前预约。",
+      citations: [{ cardId: "card-1", claimText: "鼓楼到浦口的班车需要提前预约" }],
+    }));
+
+    const answer = await buildCardBoundedAnswer("鼓楼到浦口班车要预约吗", [makeResult()]);
+
+    expect(answer.answerMode).toBe("FALLBACK");
+    expect(answer.fallbackReason).toBe("VALIDATION_FAILED");
+    expect(answer.answerText).not.toContain("提前预约");
   });
 
   it("does not add the limited-answer note for ordinary stable questions", async () => {
@@ -201,5 +245,25 @@ describe("buildCardBoundedAnswer", () => {
     expect(answer.answerText).toContain("证据缺口");
     expect(answer.answerText).toContain("校车/班车");
     expect(answer.answerText).toContain("不能确认这部分");
+  });
+
+  it("adds cross-campus coverage notes for service summaries", async () => {
+    const gulou = makeResult();
+    gulou.card.id = "gulou-takeout";
+    gulou.card.summary = "鼓楼校区可以叫外卖吗？";
+    gulou.card.body = "鼓楼校区可以点外卖，按外卖柜和校门取餐规则处理。";
+    gulou.queryTerms = ["外卖", "所有校区", "汇总"];
+
+    const suzhou = makeResult();
+    suzhou.card.id = "suzhou-takeout";
+    suzhou.card.summary = "苏州校区可以点外卖吗？外卖送到哪里？";
+    suzhou.card.body = "苏州校区外卖通常送到外卖柜或指定取餐点。";
+    suzhou.queryTerms = ["外卖", "所有校区", "汇总"];
+
+    const answer = await buildCardBoundedAnswer("南京大学所有校区外卖情况汇总", [gulou, suzhou]);
+
+    expect(answer.answerText).toContain("跨校区覆盖");
+    expect(answer.answerText).toContain("鼓楼、苏州校区");
+    expect(answer.answerText).toContain("暂无明确卡片覆盖仙林、浦口校区");
   });
 });

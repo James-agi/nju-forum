@@ -11,12 +11,13 @@ export const dynamic = "force-dynamic";
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: { q?: string };
+  searchParams: Promise<{ q?: string }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
 
-  const q = (searchParams.q ?? "").trim();
+  const resolvedSearchParams = await searchParams;
+  const q = (resolvedSearchParams.q ?? "").trim();
   const { posts, users } = q
     ? await searchForum(q, { isAdmin: user.role === "ADMIN" })
     : { posts: [], users: [] };

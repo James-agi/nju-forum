@@ -62,10 +62,11 @@ function renderFeedbackContent(content: string) {
 export default async function AdminFeedbackPage({
   searchParams,
 }: {
-  searchParams: { archived?: string };
+  searchParams: Promise<{ archived?: string }>;
 }) {
   await requireAdmin();
-  const showArchived = searchParams.archived === "1";
+  const resolvedSearchParams = await searchParams;
+  const showArchived = resolvedSearchParams.archived === "1";
 
   const items = await db.websiteFeedback.findMany({
     where: { archivedAt: showArchived ? { not: null } : null },

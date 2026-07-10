@@ -98,6 +98,34 @@ interface BarePromptRule {
 const BARE_PROMPT_RULES: BarePromptRule[] = [
   {
     terms: [
+      "营业时间",
+      "开放时间",
+      "开门时间",
+      "关门时间",
+      "闭馆时间",
+      "地址",
+      "电话",
+      "联系方式",
+      "价格",
+      "费用",
+      "多少钱",
+      "入口",
+      "网址",
+      "官网",
+      "预约",
+      "申请",
+      "办理",
+    ],
+    message: "你输入的是一个属性或办理动作，但还没说明对象。请补充你想问的是哪个地点、服务、课程或事项。",
+    suggestions: (term) => [
+      `图书馆${term}是什么？`,
+      `仙林食堂${term}是什么？`,
+      `快递站${term}怎么填？`,
+      `校医院${term}怎么查？`,
+    ],
+  },
+  {
+    terms: [
       "仙林",
       "仙林校区",
       "鼓楼",
@@ -208,8 +236,30 @@ const BARE_PROMPT_RULES: BarePromptRule[] = [
   },
 ];
 
+function classifyMissingRouteContext(normalized: string): ClarificationDecision | null {
+  const hasTransportIntent = /校车|班车|通勤|路线|换乘|怎么走|怎么去|怎么坐/.test(normalized);
+  if (!hasTransportIntent) return null;
+
+  const hasRouteEndpoint = /鼓楼|仙林|浦口|苏州|机场|南京站|南京南站|客运站|火车站|高铁站|地铁站|宿舍|教学楼|食堂|图书馆/.test(normalized);
+  if (hasRouteEndpoint) return null;
+
+  return {
+    needsClarification: true,
+    message: "这个交通问题还缺少起点、终点或使用场景。请补充你想问的是哪两个校区之间、报到接站，还是校内出行。",
+    suggestions: [
+      "鼓楼到浦口校车怎么坐？",
+      "浦口到仙林怎么通勤？",
+      "新生报到当天有接站班车吗？",
+      "仙林校区校内怎么出行？",
+    ],
+  };
+}
+
 export function classifyNeedsClarification(question: string): ClarificationDecision | null {
   const normalized = normalizeQuestionText(question);
+  const missingRouteContext = classifyMissingRouteContext(normalized);
+  if (missingRouteContext) return missingRouteContext;
+
   const rule = BARE_PROMPT_RULES.find((candidate) => candidate.terms.includes(normalized));
   if (!rule) return null;
 

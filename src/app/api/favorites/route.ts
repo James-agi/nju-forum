@@ -12,7 +12,7 @@ export async function POST(req: Request) {
 
     const { postId } = await req.json();
 
-    if (!postId) {
+    if (typeof postId !== "string" || !postId || postId.length > 64) {
       return NextResponse.json({ error: "帖子ID不能为空" }, { status: 400 });
     }
 

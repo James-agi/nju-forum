@@ -10,16 +10,17 @@ export const dynamic = "force-dynamic";
 export default async function PublicProfilePage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   const session = await getSession();
   if (!session?.user) redirect("/login");
 
+  const { id } = await params;
   // 自己的主页跳转到个人中心
-  if (session.user.id === params.id) redirect("/user/profile");
+  if (session.user.id === id) redirect("/user/profile");
 
   const profile = await db.user.findUnique({
-    where: { id: params.id },
+    where: { id },
     select: {
       id: true,
       name: true,

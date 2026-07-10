@@ -306,6 +306,27 @@ describe("retrieveKnowledgeCards", () => {
     expect(results.map((result) => result.card.id)).toContain("pukou-repair");
   });
 
+  it("does not let non-takeout dorm cards dominate takeout delivery questions", async () => {
+    mockExtractRetrievalTerms.mockResolvedValue(["外卖", "宿舍", "宿舍楼"]);
+    db.knowledgeCard.findMany.mockResolvedValue([
+      makeCard({
+        id: "dorm-facilities",
+        summary: "南大宿舍楼一楼有什么设施？能用洗衣机吗？",
+        body: "宿舍楼一楼通常有洗衣机、公共空间和门禁设施。",
+      }),
+      makeCard({
+        id: "takeout-delivery",
+        summary: "苏州校区可以点外卖吗？外卖送到哪里？",
+        body: "苏州校区可以点外卖，外卖通常送到外卖柜或指定取餐点。",
+      }),
+    ]);
+
+    const { retrieveKnowledgeCards } = await importRetrieval();
+    const results = await retrieveKnowledgeCards("外卖能送到宿舍楼下吗", 5);
+
+    expect(results.map((result) => result.card.id)).toEqual(["takeout-delivery"]);
+  });
+
   it("keeps campus-specific service cards when the question names that campus", async () => {
     mockExtractRetrievalTerms.mockResolvedValue(["浦口", "自行车", "修车", "修理", "修理铺"]);
     db.knowledgeCard.findMany.mockResolvedValue([

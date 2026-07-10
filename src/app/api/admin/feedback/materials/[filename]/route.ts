@@ -7,11 +7,11 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const FILENAME_PATTERN =
-  /^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]+$/i;
+  /^(?:[0-9a-f]{16}-)?\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[a-z0-9]+$/i;
 
 export async function GET(
   _req: Request,
-  { params }: { params: { filename: string } }
+  { params }: { params: Promise<{ filename: string }> }
 ) {
   try {
     const session = await getSession();
@@ -19,7 +19,7 @@ export async function GET(
       return NextResponse.json({ error: "无权限" }, { status: 403 });
     }
 
-    const filename = params.filename;
+    const { filename } = await params;
     if (!FILENAME_PATTERN.test(filename)) {
       return NextResponse.json({ error: "文件名不正确" }, { status: 400 });
     }

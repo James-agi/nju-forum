@@ -1,0 +1,3 @@
+Defaults:njuknowdeploy env_reset
+Defaults:njuknowdeploy secure_path=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+njuknowdeploy ALL=(root) NOPASSWD: /usr/local/sbin/njuknow-deploy

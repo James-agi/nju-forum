@@ -1,4 +1,5 @@
 import type { RetrievalResult } from "@/lib/knowledge/retrieval";
+import { isAnswerGrounded } from "@/lib/knowledge/answer-grounding";
 import { answerCompletion, LlmError } from "@/lib/knowledge/llm-client";
 import { LLM_ANSWER_TIMEOUT_MS, LLM_MAX_TOKENS, LLM_TEMPERATURE } from "@/lib/knowledge/config";
 import type {
@@ -7,6 +8,11 @@ import type {
   StructuredAnswerBlockRole,
   StructuredAnswerShape,
 } from "@/lib/knowledge/types";
+import {
+  CAMPUS_TERMS,
+  detectCrossCampusServiceIntent,
+  locationsInText,
+} from "@/lib/knowledge/query-intent";
 
 export interface AnswerCitationDraft {
   cardId: string;
@@ -65,7 +71,7 @@ const LIMITED_ANSWER_PATTERNS = [
 
 const LIMITED_ANSWER_NOTE =
   "注意：这个问题包含实时、年度变化或精确细节。知识库只能提供已有卡片里的通用信息和查询路径，不能确认实时状态、个人数据或当年最终结果。";
-const LOCATION_TERMS = ["鼓楼", "仙林", "浦口", "苏州"];
+const LOCATION_TERMS = [...CAMPUS_TERMS];
 const EXPLICIT_COVERAGE_GROUPS = [
   { terms: ["校车", "班车"], label: "校车/班车" },
 ];
@@ -187,7 +193,15 @@ function includesTerm(text: string, term: string) {
 }
 
 function locationsIn(text: string) {
-  return LOCATION_TERMS.filter((term) => includesTerm(text, term));
+  return locationsInText(text);
+}
+
+function structuredAnswerClaims(structuredAnswer: StructuredAnswer | undefined) {
+  if (!structuredAnswer) return [];
+  return [
+    structuredAnswer.headline,
+    ...structuredAnswer.blocks.flatMap((block) => block.items),
+  ];
 }
 
 function evidenceLocationScope(evidence: RetrievalResult[]) {
@@ -228,7 +242,26 @@ function appendPartialCoverageNote(question: string, answer: string, evidence: R
   return `${answer}\n\n证据缺口：当前引用卡片没有覆盖${missingGroups.map((group) => `「${group.label}」`).join("、")}信息，不能确认这部分；以上回答只覆盖引用卡片中已有的信息。`;
 }
 
+function appendCrossCampusCoverageNote(question: string, answer: string, evidence: RetrievalResult[]) {
+  const intent = detectCrossCampusServiceIntent(question, evidence.flatMap((result) => result.queryTerms || []));
+  if (!intent) return answer;
+  if (answer.includes("跨校区覆盖")) return answer;
+
+  const covered = evidenceLocationScope(evidence);
+  if (covered.length === 0) return answer;
+
+  const missing = LOCATION_TERMS.filter((location) => !covered.includes(location));
+  const missingText = missing.length > 0
+    ? `；暂无明确卡片覆盖${missing.join("、")}校区，不能替这些校区下结论`
+    : "";
+
+  return `${answer}\n\n跨校区覆盖：当前引用卡片明确覆盖${covered.join("、")}校区${missingText}。`;
+}
+
 function appendSingleCampusScopeNote(question: string, answer: string, evidence: RetrievalResult[]) {
+  if (detectCrossCampusServiceIntent(question, evidence.flatMap((result) => result.queryTerms || []))) {
+    return answer;
+  }
   if (LOCATION_TERMS.some((location) => includesTerm(question, location))) return answer;
   if (answer.includes("范围提示")) return answer;
 
@@ -241,7 +274,11 @@ function appendSingleCampusScopeNote(question: string, answer: string, evidence:
 function finalizeAnswerText(question: string, answer: string, evidence: RetrievalResult[]) {
   return appendSingleCampusScopeNote(
     question,
-    appendPartialCoverageNote(question, appendLimitedAnswerNote(question, answer), evidence),
+    appendCrossCampusCoverageNote(
+      question,
+      appendPartialCoverageNote(question, appendLimitedAnswerNote(question, answer), evidence),
+      evidence,
+    ),
     evidence,
   );
 }
@@ -250,25 +287,16 @@ function hasAnyTerm(text: string, terms: string[]) {
   return terms.some((term) => includesTerm(text, term));
 }
 
-function validateGroundedAnswer(
+async function validateGroundedAnswer(
   question: string,
   answer: string,
   citations: AnswerCitationDraft[],
   evidence: RetrievalResult[],
   structuredAnswer?: StructuredAnswer,
-): AnswerValidationResult {
+): Promise<AnswerValidationResult> {
   const originalAnswer = answer.trim();
-  const answerText = finalizeAnswerText(question, answer, evidence);
-  let safeStructuredAnswer = structuredAnswer;
-  if (safeStructuredAnswer && answerText !== originalAnswer && answerText.startsWith(originalAnswer)) {
-    safeStructuredAnswer = appendNoteBlock(
-      safeStructuredAnswer,
-      "需要注意",
-      answerText.slice(originalAnswer.length).trim(),
-    );
-  }
-  const textToValidate = `${answerText}\n${structuredAnswerText(safeStructuredAnswer)}`;
-  const supportedText = `${question}\n${evidenceText(evidence)}`;
+  const textToValidate = `${originalAnswer}\n${structuredAnswerText(structuredAnswer)}`;
+  const supportedText = evidenceText(evidence);
 
   for (const group of GROUNDED_TERM_GROUPS) {
     if (!hasAnyTerm(textToValidate, group)) continue;
@@ -276,7 +304,7 @@ function validateGroundedAnswer(
 
     return {
       ok: false,
-      answerText,
+      answerText: originalAnswer,
       reason: "VALIDATION_FAILED",
     };
   }
@@ -285,9 +313,32 @@ function validateGroundedAnswer(
   if (citations.some((citation) => !allowedCardIds.has(citation.cardId))) {
     return {
       ok: false,
-      answerText,
+      answerText: originalAnswer,
       reason: "VALIDATION_FAILED",
     };
+  }
+
+  if (!await isAnswerGrounded({
+    answerText: originalAnswer,
+    structuredClaims: structuredAnswerClaims(structuredAnswer),
+    citations,
+    evidence,
+  })) {
+    return {
+      ok: false,
+      answerText: originalAnswer,
+      reason: "VALIDATION_FAILED",
+    };
+  }
+
+  const answerText = finalizeAnswerText(question, originalAnswer, evidence);
+  let safeStructuredAnswer = structuredAnswer;
+  if (safeStructuredAnswer && answerText !== originalAnswer && answerText.startsWith(originalAnswer)) {
+    safeStructuredAnswer = appendNoteBlock(
+      safeStructuredAnswer,
+      "需要注意",
+      answerText.slice(originalAnswer.length).trim(),
+    );
   }
 
   return {
@@ -421,13 +472,18 @@ export async function buildCardBoundedAnswer(
     })
     .filter((c): c is AnswerCitationDraft => Boolean(c));
 
+  if (citations.length !== parsed.citations.length) {
+    fallback.fallbackReason = "VALIDATION_FAILED";
+    return fallback;
+  }
+
   if (!parsed.answer.trim() || citations.length === 0) {
     fallback.fallbackReason = "EMPTY_RESULT";
     return fallback;
   }
 
   const structuredAnswer = sanitizeStructuredAnswer(parsed.structuredAnswer);
-  const validation = validateGroundedAnswer(question, parsed.answer.trim(), citations, evidence, structuredAnswer);
+  const validation = await validateGroundedAnswer(question, parsed.answer.trim(), citations, evidence, structuredAnswer);
   if (!validation.ok) {
     fallback.fallbackReason = validation.reason;
     return fallback;

@@ -18,23 +18,31 @@ function ParticleBackground() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let animId: number;
+    const reducedMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reducedMotionQuery.matches) return;
+
+    let animId = 0;
+    let isVisible = !document.hidden;
     const particles: { x: number; y: number; vx: number; vy: number; size: number; alpha: number }[] = [];
 
     const isDark = () => document.documentElement.classList.contains("dark");
 
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      canvas.style.width = `${window.innerWidth}px`;
+      canvas.style.height = `${window.innerHeight}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
     window.addEventListener("resize", resize);
 
-    const count = 80;
+    const count = window.innerWidth < 768 ? 36 : 80;
     for (let i = 0; i < count; i++) {
       particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
         vx: (Math.random() - 0.5) * 0.6,
         vy: (Math.random() - 0.5) * 0.6,
         size: Math.random() * 2.5 + 1,
@@ -43,15 +51,15 @@ function ParticleBackground() {
     }
 
     const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
       const dark = isDark();
 
       for (let i = 0; i < particles.length; i++) {
         const p = particles[i];
         p.x += p.vx;
         p.y += p.vy;
-        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
-        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+        if (p.x < 0 || p.x > window.innerWidth) p.vx *= -1;
+        if (p.y < 0 || p.y > window.innerHeight) p.vy *= -1;
 
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -78,17 +86,44 @@ function ParticleBackground() {
           }
         }
       }
-      animId = requestAnimationFrame(draw);
+      if (isVisible) {
+        animId = requestAnimationFrame(draw);
+      }
     };
-    draw();
+
+    const start = () => {
+      if (!animId && isVisible) {
+        animId = requestAnimationFrame(draw);
+      }
+    };
+
+    const stop = () => {
+      if (animId) {
+        cancelAnimationFrame(animId);
+        animId = 0;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      isVisible = !document.hidden;
+      if (isVisible) {
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    start();
 
     return () => {
-      cancelAnimationFrame(animId);
+      stop();
       window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
-  return <canvas ref={canvasRef} className="absolute inset-0 z-0" />;
+  return <canvas ref={canvasRef} aria-hidden="true" className="absolute inset-0 z-0" />;
 }
 
 function getSafeCallbackUrl() {

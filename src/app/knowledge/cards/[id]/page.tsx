@@ -34,12 +34,13 @@ function formatDate(date: Date) {
 export default async function KnowledgeCardDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
   await requireKnowledgePageUser();
 
+  const { id } = await params;
   const card = await db.knowledgeCard.findFirst({
-    where: { id: params.id, archivedAt: null },
+    where: { id, archivedAt: null },
     select: {
       id: true,
       summary: true,

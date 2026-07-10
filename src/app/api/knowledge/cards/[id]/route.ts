@@ -43,14 +43,15 @@ function toCardDTO(card: {
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authz = await requireKnowledgeUser();
     if (!authz.ok) return authz.response;
 
+    const { id } = await params;
     const card = await db.knowledgeCard.findFirst({
-      where: { id: params.id, archivedAt: null },
+      where: { id, archivedAt: null },
     });
 
     if (!card) {
@@ -66,12 +67,13 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authz = await requireKnowledgeAuthor();
     if (!authz.ok) return authz.response;
 
+    const { id } = await params;
     const payload = await req.json();
     const parsed = cardUpdateSchema.safeParse(payload);
     if (!parsed.success) {
@@ -83,7 +85,7 @@ export async function PATCH(
 
     // 先检查卡片是否存在且未被归档
     const existing = await db.knowledgeCard.findFirst({
-      where: { id: params.id, archivedAt: null },
+      where: { id, archivedAt: null },
       select: { id: true },
     });
     if (!existing) {
@@ -94,7 +96,7 @@ export async function PATCH(
     const { archive, sourceUrls, ...fields } = parsed.data;
 
     const before = await db.knowledgeCard.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { summary: true, body: true, domainTag: true, verificationStatus: true },
     });
     const verificationStatusChanged =
@@ -113,7 +115,7 @@ export async function PATCH(
       fields.verificationStatus ?? before?.verificationStatus;
 
     const card = await db.knowledgeCard.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...fields,
         sourceUrls: sourceUrls ? JSON.stringify(sourceUrls) : undefined,

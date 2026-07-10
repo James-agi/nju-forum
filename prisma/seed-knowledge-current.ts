@@ -14,6 +14,7 @@ interface CurrentSeedCard {
   sourceType: SourceType;
   verificationStatus: VerificationStatus;
   verifiedAt: string | null;
+  updatedAt?: string;
   domainTag: string;
   archivedAt: string | null;
   sourceUrls: string | null;
@@ -31,6 +32,14 @@ function loadSeedPayload(): CurrentSeedPayload {
   return JSON.parse(fs.readFileSync(file, "utf8")) as CurrentSeedPayload;
 }
 
+function restoredVerifiedAt(card: CurrentSeedCard, exportedAt: string, currentVerifiedAt?: Date | null) {
+  if (card.verifiedAt) return new Date(card.verifiedAt);
+  if (card.updatedAt) return new Date(card.updatedAt);
+  if (currentVerifiedAt) return currentVerifiedAt;
+  if (card.verificationStatus === "VERIFIED") return new Date(exportedAt);
+  return null;
+}
+
 async function main() {
   const apply = process.argv.includes("--apply");
   const payload = loadSeedPayload();
@@ -46,14 +55,20 @@ async function main() {
 
   const current = await prisma.knowledgeCard.findMany({
     where: { id: { in: payload.cards.map((card) => card.id) } },
-    select: { id: true },
+    select: { id: true, verifiedAt: true },
   });
   const existingIds = new Set(current.map((card) => card.id));
+  const currentById = new Map(current.map((card) => [card.id, card]));
   const toCreate = payload.cards.filter((card) => !existingIds.has(card.id));
   const toUpdate = payload.cards.filter((card) => existingIds.has(card.id));
 
   if (apply) {
     for (const card of payload.cards) {
+      const verifiedAt = restoredVerifiedAt(
+        card,
+        payload.exportedAt,
+        currentById.get(card.id)?.verifiedAt,
+      );
       await prisma.knowledgeCard.upsert({
         where: { id: card.id },
         update: {
@@ -64,7 +79,7 @@ async function main() {
           sourceDescription: card.sourceDescription,
           sourceType: card.sourceType,
           verificationStatus: card.verificationStatus,
-          verifiedAt: card.verifiedAt ? new Date(card.verifiedAt) : null,
+          verifiedAt,
           domainTag: card.domainTag,
           archivedAt: card.archivedAt ? new Date(card.archivedAt) : null,
           sourceUrls: card.sourceUrls,
@@ -79,7 +94,7 @@ async function main() {
           sourceDescription: card.sourceDescription,
           sourceType: card.sourceType,
           verificationStatus: card.verificationStatus,
-          verifiedAt: card.verifiedAt ? new Date(card.verifiedAt) : null,
+          verifiedAt,
           domainTag: card.domainTag,
           archivedAt: card.archivedAt ? new Date(card.archivedAt) : null,
           sourceUrls: card.sourceUrls,

@@ -8,6 +8,32 @@ import {
   EVIDENCE_MAX_USABLE,
   EVIDENCE_SCORE_DIFF,
 } from "@/lib/knowledge/config";
+import {
+  CAMPUS_TERMS,
+  SERVICE_TOPICS,
+  detectServiceTopic,
+  isRealtimeOperationalStatusQuestion,
+  textCoversServiceTopic,
+} from "@/lib/knowledge/query-intent";
+import {
+  cardCoversCampusOverview,
+  isCampusOverviewQuery,
+  isCampusOverviewResults,
+  prioritizeCampusOverviewEvidence,
+} from "@/lib/knowledge/evidence-policies/campus-overview";
+import {
+  cardCoversCrossCampusService,
+  isCrossCampusServiceQuery,
+  isCrossCampusServiceResults,
+  prioritizeCrossCampusServiceEvidence,
+} from "@/lib/knowledge/evidence-policies/cross-campus-service";
+import {
+  directAnswerQuestionText,
+  evidenceSearchText,
+  includesReliableTerm,
+  splitEvidenceSections,
+  uniqueTerms,
+} from "@/lib/knowledge/evidence-text";
 
 export interface EvidenceEvaluation {
   sufficient: boolean;
@@ -15,109 +41,10 @@ export interface EvidenceEvaluation {
   cards: RetrievalResult[];
 }
 
-const FALSE_POSITIVE_PREFIXES: Record<string, string[]> = {
-  "\u62a5\u5230": ["\u7533"],
-};
-
-const LOCATION_TERMS = ["鼓楼", "仙林", "浦口", "苏州"];
-const CAMPUS_OVERVIEW_TERMS = ["校区概况", "概况", "介绍", "怎么样", "有什么", "校园生活", "校区交通"];
-const CAMPUS_OVERVIEW_SUPPORT_TERMS = [
-  "宿舍",
-  "食堂",
-  "通勤",
-  "交通",
-  "商铺",
-  "快递",
-  "体育馆",
-  "运动场",
-  "自习",
-  "生活",
-  "服务",
-  "校区",
-];
-const CONCRETE_CAMPUS_FOCUS_TERMS = [
-  "宿舍",
-  "食堂",
-  "餐厅",
-  "餐饮",
-  "吃饭",
-  "吃点",
-  "吃什么",
-  "吃的",
-  "觅食",
-  "美食",
-  "通勤",
-  "交通",
-  "地铁",
-  "公交",
-  "班车",
-  "校车",
-  "商铺",
-  "快递",
-  "理发",
-  "洗衣",
-  "打印",
-  "外卖",
-  "修车",
-  "自行车",
-  "浴室",
-  "自习",
-  "图书馆",
-  "校园卡",
-  "一卡通",
-  "饭卡",
-  "校园网",
-  "校医院",
-  "医保",
-];
-const CAMPUS_OVERVIEW_FACETS = [
-  {
-    id: "housing",
-    terms: ["宿舍", "床", "床位", "洗澡", "门禁", "用电", "入住"],
-  },
-  {
-    id: "food",
-    terms: ["食堂", "餐厅", "餐饮", "吃饭", "吃的", "美食", "觅食"],
-  },
-  {
-    id: "transport",
-    terms: ["校区交通", "通勤", "交通", "地铁", "公交", "班车", "校车", "路线"],
-  },
-  {
-    id: "services",
-    terms: ["商铺", "快递", "理发", "洗衣", "打印", "便利店", "教超", "教育超市", "修理", "修车"],
-  },
-  {
-    id: "study",
-    terms: ["自习", "图书馆", "背诵", "讨论", "教室"],
-  },
-];
-const LOCATION_SENSITIVE_SERVICE_TERMS = [
-  "洗衣",
-  "洗衣店",
-  "理发",
-  "理发店",
-  "剪头发",
-  "发店",
-  "打印",
-  "打印店",
-  "快递",
-  "外卖",
-  "食堂",
-  "修车",
-  "自行车",
-  "修理",
-  "修理铺",
-  "浴室",
-  "洗浴",
-  "教超",
-  "教育超市",
-  "便利店",
-  "商铺",
-  "日用品",
-  "生活用品",
-  "日化用品",
-];
+const LOCATION_TERMS: string[] = [...CAMPUS_TERMS];
+const LOCATION_SENSITIVE_SERVICE_TERMS = Array.from(
+  new Set(SERVICE_TOPICS.flatMap((topic) => [...topic.queryTerms, ...topic.evidenceTerms])),
+);
 const MIN_LIMITED_BROAD_SCORE = 3;
 const MIN_DIRECT_TITLE_SCORE = 6;
 const NON_EVIDENCE_TERMS = new Set([
@@ -168,6 +95,11 @@ const NON_EVIDENCE_TERMS = new Set([
   "如何",
   "什么",
   "具体",
+  "预约",
+  "预约方式",
+  "咨询",
+  "咨询预约",
+  "中心",
   "现在",
   "今天",
   "今年",
@@ -182,6 +114,16 @@ const NON_EVIDENCE_TERMS = new Set([
   "求稳",
   "说法",
   "谢谢",
+  "情况",
+  "所有",
+  "所有校区",
+  "各校区",
+  "全校区",
+  "每个校区",
+  "不同校区",
+  "汇总",
+  "对比",
+  "分别",
 ]);
 const ORIGINAL_ANCHOR_STOP_TERMS = new Set([
   "校外",
@@ -271,6 +213,19 @@ const DIRECT_ANSWER_RELATED_TERMS: Record<string, string[]> = {
   "图书馆开放时间": ["图书馆开放时间", "图书馆营业时间", "图书馆关门", "图书馆闭馆", "几点闭馆", "几点关门"],
   "导师名额状态": ["导师还缺学生", "导师缺学生", "导师招生名额", "导师剩余名额", "导师名额余量"],
 };
+const DIRECT_ACTION_QUERY_PATTERN = /预约|申请|办理|怎么预约|如何预约|怎么申请|如何申请|怎么办理|如何办理/;
+const DIRECT_ACTION_SECTION_TERMS = ["预约", "申请", "办理", "入口", "系统", "平台", "流程", "路径", "方式", "网址", "链接"];
+const DIRECT_ACTION_GENERIC_TERMS = new Set([
+  "预约",
+  "预约方式",
+  "咨询",
+  "咨询预约",
+  "中心",
+  "申请",
+  "办理",
+  "流程",
+  "方式",
+]);
 const TRANSFER_QUESTION_TERMS = ["转专业", "换专业", "跨大类准入"];
 const TRANSFER_EVIDENCE_TERMS = [
   "转专业",
@@ -386,6 +341,14 @@ const DIRECT_TITLE_ANCHORS = new Set([
   "宿舍",
   "校园卡",
   "饭卡",
+  "报到",
+  "迎新",
+  "准备",
+  "材料",
+  "证件",
+  "物品",
+  "报到材料",
+  "报到准备",
 ]);
 const LIMITED_DETAIL_PATTERNS = [
   /今天|明天|今晚|现在|当前|实时|最新|今年|本学期|下学期/,
@@ -393,28 +356,6 @@ const LIMITED_DETAIL_PATTERNS = [
   /几点|开门|关门|营业|开放时间|关闭时间/,
   /余额|多少钱|价格|哪位老师/,
 ];
-
-function isFalsePositiveTermMatch(text: string, term: string, index: number) {
-  const prefixes = FALSE_POSITIVE_PREFIXES[term];
-  if (!prefixes) return false;
-  const before = index > 0 ? text[index - 1] : "";
-  return prefixes.includes(before);
-}
-
-function includesReliableTerm(text: string, term: string) {
-  const normalizedText = text.toLowerCase();
-  const normalizedTerm = term.toLowerCase();
-  let index = normalizedText.indexOf(normalizedTerm);
-
-  while (index >= 0) {
-    if (!isFalsePositiveTermMatch(normalizedText, normalizedTerm, index)) {
-      return true;
-    }
-    index = normalizedText.indexOf(normalizedTerm, index + normalizedTerm.length);
-  }
-
-  return false;
-}
 
 function missesRequiredLocationConstraint(result: RetrievalResult) {
   const queryLocations = (result.queryTerms || []).filter((term) => LOCATION_TERMS.includes(term));
@@ -456,40 +397,29 @@ function cardCoversLocationSensitiveService(result: RetrievalResult) {
   return LOCATION_SENSITIVE_SERVICE_TERMS.some((term) => includesReliableTerm(text, term));
 }
 
+function queryServiceTopic(result: RetrievalResult) {
+  if (isCampusOverviewQuery(result)) return null;
+  return detectServiceTopic(directAnswerQuestionText(result), result.queryTerms || []);
+}
+
+function missesQueryServiceTopic(result: RetrievalResult) {
+  const topic = queryServiceTopic(result);
+  if (!topic) return false;
+  return !textCoversServiceTopic(evidenceSearchText(result), topic);
+}
+
+function isRealtimeOperationalStatusQuery(result: RetrievalResult) {
+  return isRealtimeOperationalStatusQuestion(directAnswerQuestionText(result));
+}
+
+function cardCoversRealtimeOperationalStatus(result: RetrievalResult) {
+  const text = evidenceSearchText(result);
+  return /实时查询|实时状态查询|营业状态查询|开放状态查询|营业安排|开放安排|官方通知|查询入口|查询路径/.test(text);
+}
+
 function hasLocationInSummary(result: RetrievalResult) {
   const summary = result.card.summary.toLowerCase();
   return LOCATION_TERMS.some((term) => includesReliableTerm(summary, term));
-}
-
-function queryCampusOverviewLocation(result: RetrievalResult) {
-  const terms = result.queryTerms || [];
-  const question = directAnswerQuestionText(result);
-  if (CONCRETE_CAMPUS_FOCUS_TERMS.some((term) => includesReliableTerm(question, term))) {
-    return null;
-  }
-
-  const hasOverviewIntent = CAMPUS_OVERVIEW_TERMS.some((term) => (
-    terms.includes(term) || question.includes(term.toLowerCase())
-  ));
-  if (!hasOverviewIntent) return null;
-
-  return LOCATION_TERMS.find((term) => terms.includes(term) || question.includes(term.toLowerCase())) || null;
-}
-
-function isCampusOverviewQuery(result: RetrievalResult) {
-  return Boolean(queryCampusOverviewLocation(result));
-}
-
-function cardCoversCampusOverview(result: RetrievalResult) {
-  const location = queryCampusOverviewLocation(result);
-  if (!location) return false;
-  if (result.card.verificationStatus !== "VERIFIED") return false;
-  if (result.score < MIN_DIRECT_TITLE_SCORE) return false;
-
-  const text = evidenceSearchText(result);
-  if (!includesReliableTerm(text, location)) return false;
-
-  return CAMPUS_OVERVIEW_SUPPORT_TERMS.some((term) => includesReliableTerm(text, term));
 }
 
 function isOriginalCoreAnchor(term: string) {
@@ -505,27 +435,6 @@ function missesOriginalCoreAnchor(result: RetrievalResult) {
 
   const matched = new Set(result.matchedTerms.map((term) => term.toLowerCase()));
   return !originalCoreAnchors.some((term) => matched.has(term.toLowerCase()));
-}
-
-function uniqueTerms(terms: string[]) {
-  return Array.from(new Set(terms.map((term) => term.toLowerCase())));
-}
-
-function evidenceSearchText(result: RetrievalResult) {
-  return [
-    result.card.summary,
-    result.card.body,
-    result.card.sourceExcerpt || "",
-    result.card.sourceDescription,
-    result.card.domainTag,
-  ].join("\n").toLowerCase();
-}
-
-function directAnswerQuestionText(result: RetrievalResult) {
-  return (
-    result.question ||
-    (result.originalQueryTerms || result.queryTerms || []).join("")
-  ).toLowerCase();
 }
 
 function isDirectAnswerAnchor(term: string) {
@@ -620,6 +529,45 @@ function missesDirectAnswerability(result: RetrievalResult) {
   return coveredCount < Math.min(2, anchors.length);
 }
 
+function isDirectActionObjectAnchor(term: string) {
+  const normalized = term.toLowerCase();
+  if (LOCATION_TERMS.includes(term)) return false;
+  if (NON_EVIDENCE_TERMS.has(normalized) || ORIGINAL_ANCHOR_STOP_TERMS.has(normalized)) return false;
+  if (DIRECT_ACTION_GENERIC_TERMS.has(normalized)) return false;
+  return normalized.length >= 3 && isSpec(normalized);
+}
+
+function directActionObjectAnchors(result: RetrievalResult) {
+  const terms = result.originalQueryTerms?.length ? result.originalQueryTerms : result.queryTerms || [];
+  return uniqueTerms(terms.filter(isDirectActionObjectAnchor));
+}
+
+function cardStrongTitleText(result: RetrievalResult) {
+  return [
+    result.card.summary,
+    result.card.domainTag,
+  ].join("\n").toLowerCase();
+}
+
+function bodySectionCoversDirectActionObject(result: RetrievalResult, anchors: string[]) {
+  return splitEvidenceSections(result.card.body).some((section) => {
+    const hasObject = anchors.some((anchor) => includesReliableTerm(section, anchor));
+    if (!hasObject) return false;
+    return DIRECT_ACTION_SECTION_TERMS.some((term) => includesReliableTerm(section, term));
+  });
+}
+
+function missesDirectActionObject(result: RetrievalResult) {
+  const question = directAnswerQuestionText(result);
+  if (!DIRECT_ACTION_QUERY_PATTERN.test(question)) return false;
+
+  const anchors = directActionObjectAnchors(result);
+  if (anchors.length === 0) return false;
+  if (anchors.some((anchor) => includesReliableTerm(cardStrongTitleText(result), anchor))) return false;
+  if (bodySectionCoversDirectActionObject(result, anchors)) return false;
+  return true;
+}
+
 function isTransferQuestion(result: RetrievalResult) {
   const question = directAnswerQuestionText(result);
   const terms = result.originalQueryTerms || result.queryTerms || [];
@@ -649,72 +597,6 @@ function prioritizeLocationServiceEvidence(results: RetrievalResult[]) {
   return [...neutral, ...located];
 }
 
-function isCampusOverviewResults(results: RetrievalResult[]) {
-  return results.some(isCampusOverviewQuery);
-}
-
-function campusOverviewFacet(result: RetrievalResult) {
-  const summary = result.card.summary.toLowerCase();
-  const body = result.card.body.toLowerCase();
-  const domain = result.card.domainTag.toLowerCase();
-  const matched = result.matchedTerms.map((term) => term.toLowerCase());
-
-  let bestId = "other";
-  let bestScore = 0;
-  let bestPriority = Number.POSITIVE_INFINITY;
-  for (const [priority, facet] of CAMPUS_OVERVIEW_FACETS.entries()) {
-    const score = facet.terms.reduce((total, term) => {
-      const normalized = term.toLowerCase();
-      let next = total;
-      if (includesReliableTerm(summary, normalized)) next += 4;
-      if (matched.includes(normalized)) next += 3;
-      if (includesReliableTerm(domain, normalized)) next += 2;
-      if (includesReliableTerm(body, normalized)) next += 1;
-      return next;
-    }, 0);
-
-    if (score > bestScore || (score === bestScore && score > 0 && priority < bestPriority)) {
-      bestId = facet.id;
-      bestScore = score;
-      bestPriority = priority;
-    }
-  }
-
-  return bestId;
-}
-
-function prioritizeCampusOverviewEvidence(results: RetrievalResult[]) {
-  if (!isCampusOverviewResults(results)) return results;
-
-  const domainRank = new Map([
-    ["校园生活", 0],
-    ["校区交通", 1],
-    ["校园办事", 2],
-    ["网络系统", 3],
-    ["组织资源", 4],
-  ]);
-
-  const sorted = [...results].sort((a, b) => {
-    const rankA = domainRank.get(a.card.domainTag) ?? 9;
-    const rankB = domainRank.get(b.card.domainTag) ?? 9;
-    return b.score - a.score || rankA - rankB || b.card.updatedAt.getTime() - a.card.updatedAt.getTime();
-  });
-
-  const selected: RetrievalResult[] = [];
-  const selectedFacets = new Set<string>();
-  for (const result of sorted) {
-    const facet = campusOverviewFacet(result);
-    if (facet === "other" || selectedFacets.has(facet)) continue;
-    selected.push(result);
-    selectedFacets.add(facet);
-  }
-
-  return [
-    ...selected,
-    ...sorted.filter((result) => !selected.includes(result)),
-  ];
-}
-
 function hasLimitedBroadEvidence(result: RetrievalResult) {
   if (result.card.verificationStatus !== "VERIFIED") return false;
   if (missesRequiredLocationConstraint(result)) return false;
@@ -732,6 +614,18 @@ function hasLimitedBroadEvidence(result: RetrievalResult) {
 }
 
 function hasUsableEvidence(result: RetrievalResult) {
+  if (isRealtimeOperationalStatusQuery(result) && !cardCoversRealtimeOperationalStatus(result)) {
+    return false;
+  }
+  if (missesDirectActionObject(result)) {
+    return false;
+  }
+  if (isCrossCampusServiceQuery(result)) {
+    return cardCoversCrossCampusService(result, MIN_LIMITED_BROAD_SCORE);
+  }
+  if (missesQueryServiceTopic(result)) {
+    return false;
+  }
   return hasCampusOverviewEvidence(result) || hasStrongEvidence(result) || hasDirectTitleEvidence(result) || hasLimitedBroadEvidence(result);
 }
 
@@ -740,14 +634,7 @@ function hasCampusOverviewEvidence(result: RetrievalResult) {
   if (missesRequiredLocationConstraint(result)) return false;
   if (missesTransferQuestionAction(result)) return false;
   if (missesDirectAnswerability(result)) return false;
-  return cardCoversCampusOverview(result);
-}
-
-function splitEvidenceSections(body: string): string[] {
-  return body
-    .split(/(?=\n?\s*\u3010[^\u3011]+\u3011)|(?=\n\s*#{1,6}\s+)/)
-    .map((section) => section.trim().toLowerCase())
-    .filter(Boolean);
+  return cardCoversCampusOverview(result, MIN_DIRECT_TITLE_SCORE);
 }
 
 function hasSectionEvidence(result: RetrievalResult, contentStrongTerms: string[]) {
@@ -824,14 +711,20 @@ export function evaluateEvidence(results: RetrievalResult[]): EvidenceEvaluation
     return { sufficient: false, reason: "UNRELATED", cards: [] };
   }
 
-  const preferredStrongActive = prioritizeCampusOverviewEvidence(prioritizeLocationServiceEvidence(strongActive));
+  const preferredStrongActive = prioritizeCrossCampusServiceEvidence(
+    prioritizeCampusOverviewEvidence(prioritizeLocationServiceEvidence(strongActive)),
+  );
   const topScore = preferredStrongActive[0]?.score ?? 0;
-  const minUsableScore = isCampusOverviewResults(preferredStrongActive)
+  const minUsableScore = isCrossCampusServiceResults(preferredStrongActive)
+    ? MIN_LIMITED_BROAD_SCORE
+    : isCampusOverviewResults(preferredStrongActive)
     ? MIN_DIRECT_TITLE_SCORE
     : isLocationServiceWithoutQueryLocation(preferredStrongActive)
     ? MIN_DIRECT_TITLE_SCORE
     : Math.max(MIN_SINGLE_ANCHOR_SCORE, topScore - EVIDENCE_SCORE_DIFF);
-  const maxUsable = isCampusOverviewResults(preferredStrongActive)
+  const maxUsable = isCrossCampusServiceResults(preferredStrongActive)
+    ? Math.max(EVIDENCE_MAX_USABLE, LOCATION_TERMS.length)
+    : isCampusOverviewResults(preferredStrongActive)
     ? Math.max(EVIDENCE_MAX_USABLE, 4)
     : EVIDENCE_MAX_USABLE;
   const usable = preferredStrongActive

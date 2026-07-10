@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { compare } from "bcryptjs";
 import { db } from "@/lib/db";
+import { applyCurrentUserToToken, applyTokenToSession } from "@/lib/auth-token";
 
 export const {
   handlers,
@@ -9,7 +10,7 @@ export const {
   signIn,
   signOut,
 } = NextAuth({
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 12 * 60 * 60 },
   pages: {
     signIn: "/login",
   },
@@ -21,16 +22,21 @@ export const {
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (typeof credentials?.email !== "string" || typeof credentials?.password !== "string") {
+          return null;
+        }
+        const email = credentials.email.trim().toLowerCase();
+        const password = credentials.password;
+        if (!email || email.length > 254 || !password || password.length > 128) return null;
 
         const user = await db.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email },
         });
 
         if (!user || user.banned) return null;
 
         const isPasswordValid = await compare(
-          credentials.password as string,
+          password,
           user.password
         );
 
@@ -54,6 +60,7 @@ export const {
         }
         token.role = (user as { role: string }).role;
         token.avatar = (user as { avatar: string | null }).avatar;
+        token.disabled = false;
       }
       // 客户端 useSession().update({ avatar }) 时同步进 token，头像即时刷新
       if (
@@ -68,24 +75,16 @@ export const {
       if (typeof token.id === "string") {
         const currentUser = await db.user.findUnique({
           where: { id: token.id },
-          select: { role: true, avatar: true },
+          select: { role: true, avatar: true, banned: true },
         });
 
-        if (currentUser) {
-          token.role = currentUser.role;
-          token.avatar = currentUser.avatar;
-        }
+        applyCurrentUserToToken(token, currentUser);
       }
 
       return token;
     },
     async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
-        session.user.avatar = token.avatar as string | null;
-      }
-      return session;
+      return applyTokenToSession(session, token);
     },
   },
 });
