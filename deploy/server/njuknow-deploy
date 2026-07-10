@@ -62,5 +62,4 @@ env -i \
   PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
   RELEASE_NAME="${release_name}" \
   RUN_DB_MIGRATIONS="${run_migrations}" \
-  DEPLOY_OWNER="${DEPLOY_USER}" \
   "${DEPLOY_SCRIPT}" "${artifact_path}"

@@ -4,6 +4,7 @@ set -Eeuo pipefail
 SOURCE_DIR="${1:-}"
 DEPLOY_PUBLIC_KEY="${2:-}"
 DEPLOY_USER="${DEPLOY_USER:-njuknowdeploy}"
+EXTRACT_USER="${EXTRACT_USER:-njuknowextract}"
 BACKUP_ROOT="${BACKUP_ROOT:-/var/backups/njuknow}"
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -114,6 +115,16 @@ if ! id "${DEPLOY_USER}" >/dev/null 2>&1; then
 fi
 passwd -l "${DEPLOY_USER}" >/dev/null
 
+if ! id "${EXTRACT_USER}" >/dev/null 2>&1; then
+  useradd \
+    --system \
+    --no-create-home \
+    --home-dir /nonexistent \
+    --shell /usr/sbin/nologin \
+    "${EXTRACT_USER}"
+fi
+usermod --lock --home /nonexistent --shell /usr/sbin/nologin "${EXTRACT_USER}"
+
 deploy_home="$(getent passwd "${DEPLOY_USER}" | cut -d: -f6)"
 deploy_group="$(id -gn "${DEPLOY_USER}")"
 install -d -o "${DEPLOY_USER}" -g "${deploy_group}" -m 700 "${deploy_home}/.ssh"
@@ -214,3 +225,4 @@ trap - ERR
 echo "Hardening installation completed."
 echo "Backup: ${backup_dir}"
 echo "Deploy user: ${DEPLOY_USER}"
+echo "Artifact extraction user: ${EXTRACT_USER}"
