@@ -10,6 +10,7 @@ APP_HOST="${APP_HOST:-127.0.0.1}"
 APP_RUN_USER="${APP_RUN_USER:-njuknowapp}"
 APP_RUN_GROUP="${APP_RUN_GROUP:-${APP_RUN_USER}}"
 APP_RUN_HOME="${APP_RUN_HOME:-${SHARED_DIR}}"
+ARTIFACT_EXTRACT_USER="${ARTIFACT_EXTRACT_USER:-njuknowextract}"
 PM2_HOME_DIR="${PM2_HOME_DIR:-${APP_RUN_HOME}/.pm2}"
 LEGACY_ROOT_PM2_CLEANUP="${LEGACY_ROOT_PM2_CLEANUP:-1}"
 PROCESS_MANAGER="${PROCESS_MANAGER:-systemd}"
@@ -19,7 +20,6 @@ RUN_DB_MIGRATIONS="${RUN_DB_MIGRATIONS:-0}"
 KEEP_FAILED_RELEASE="${KEEP_FAILED_RELEASE:-1}"
 PM2_USE_SUDO="${PM2_USE_SUDO:-auto}"
 RELEASE_NAME="${RELEASE_NAME:-$(date +%Y%m%d%H%M%S)-artifact}"
-DEPLOY_OWNER="${DEPLOY_OWNER:-${SUDO_USER:-$(id -un)}}"
 
 if [ -z "${ARTIFACT_PATH}" ] || [ ! -f "${ARTIFACT_PATH}" ]; then
   echo "ERROR: artifact file is missing."
@@ -65,14 +65,12 @@ root_cmd() {
   fi
 }
 
-deploy_owner_cmd() {
-  if [ "$(id -un)" = "${DEPLOY_OWNER}" ]; then
-    "$@"
-  elif [ "$(id -u)" -eq 0 ]; then
-    sudo -n -u "${DEPLOY_OWNER}" "$@"
-  else
-    sudo -n -u "${DEPLOY_OWNER}" "$@"
+artifact_extract_cmd() {
+  if [ -z "${ARTIFACT_EXTRACT_USER}" ]; then
+    echo "ERROR: ARTIFACT_EXTRACT_USER must be configured."
+    return 1
   fi
+  sudo -n -u "${ARTIFACT_EXTRACT_USER}" "$@"
 }
 
 app_user_cmd() {
@@ -247,6 +245,11 @@ pm2_start_app() {
 }
 
 prepare_app_runtime_user() {
+  if ! id "${ARTIFACT_EXTRACT_USER}" >/dev/null 2>&1; then
+    echo "ERROR: artifact extraction user does not exist: ${ARTIFACT_EXTRACT_USER}"
+    exit 1
+  fi
+
   if [ -z "${APP_RUN_USER}" ]; then
     return
   fi
@@ -294,11 +297,12 @@ prepare_app_writable_paths() {
 }
 
 prepare_release_permissions() {
-  if [ -z "${APP_RUN_USER}" ]; then
-    return
+  local release_group="root"
+  if [ -n "${APP_RUN_USER}" ]; then
+    release_group="${APP_RUN_GROUP}"
   fi
 
-  root_cmd chown -R "root:${APP_RUN_GROUP}" "${NEW_APP_DIR}"
+  root_cmd chown -hR "root:${release_group}" "${NEW_APP_DIR}"
   root_cmd chmod -R u=rwX,g=rX,o= "${NEW_APP_DIR}"
   if [ -f "${NEW_APP_DIR}/.env" ]; then
     root_cmd chmod 640 "${NEW_APP_DIR}/.env"
@@ -324,6 +328,15 @@ validate_release_symlinks() {
         ;;
     esac
   done < <(find "${NEW_APP_DIR}" -type l -print0)
+}
+
+validate_release_file_types() {
+  local unsafe_path
+  unsafe_path="$(find "${NEW_APP_DIR}" -xdev \( -type b -o -type c -o -type p -o -type s \) -print -quit)"
+  if [ -n "${unsafe_path}" ]; then
+    echo "ERROR: artifact contains an unsupported special file: ${unsafe_path}"
+    return 1
+  fi
 }
 
 start_smoke_server() {
@@ -527,9 +540,18 @@ safe_link_shared_runtime_path() {
   ln -s "${shared_path}" "${target_path}"
 }
 
-root_cmd install -d -o "${DEPLOY_OWNER}" -g "$(id -gn "${DEPLOY_OWNER}")" -m 750 "${NEW_APP_DIR}"
-deploy_owner_cmd tar --no-same-owner --no-same-permissions -xzf "${ARTIFACT_PATH}" -C "${NEW_APP_DIR}"
+root_cmd install -d \
+  -o "${ARTIFACT_EXTRACT_USER}" \
+  -g "$(id -gn "${ARTIFACT_EXTRACT_USER}")" \
+  -m 750 \
+  "${NEW_APP_DIR}"
+artifact_extract_cmd tar --no-same-owner --no-same-permissions -xzf "${ARTIFACT_PATH}" -C "${NEW_APP_DIR}"
+prepare_release_permissions
 validate_release_symlinks || {
+  cleanup_failed_release
+  exit 1
+}
+validate_release_file_types || {
   cleanup_failed_release
   exit 1
 }
@@ -547,6 +569,12 @@ if [ ! -f "${NEW_APP_DIR}/scripts/start-standalone.js" ]; then
 fi
 
 root_cmd cp -p "${ENV_SOURCE}" "${NEW_APP_DIR}/.env"
+if [ -n "${APP_RUN_USER}" ]; then
+  root_cmd chown "root:${APP_RUN_GROUP}" "${NEW_APP_DIR}/.env"
+else
+  root_cmd chown root:root "${NEW_APP_DIR}/.env"
+fi
+root_cmd chmod 640 "${NEW_APP_DIR}/.env"
 safe_link_shared_path "knowledge-images"
 safe_link_shared_path "pdfs"
 safe_link_shared_path "forum-images"
@@ -574,7 +602,6 @@ else
   echo "==> Skipping database migrations"
 fi
 
-prepare_release_permissions
 prepare_app_writable_paths
 
 echo "==> Smoke testing release on port ${HEALTH_PORT}"
