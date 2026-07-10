@@ -2,6 +2,12 @@ name: Deploy production
 
 on:
   workflow_dispatch:
+    inputs:
+      run_migrations:
+        description: Apply pending Prisma migrations before switching releases
+        required: true
+        default: true
+        type: boolean
 
 concurrency:
   group: production
@@ -97,12 +103,14 @@ jobs:
           EOF
 
       - name: Upload artifact and deploy script
+        env:
+          RUN_DB_MIGRATIONS: ${{ inputs.run_migrations && '1' || '0' }}
         run: |
           set -euo pipefail
           SSH_CONFIG="$HOME/.ssh/njuknow_deploy_config"
 
           scp -F "${SSH_CONFIG}" "${ARTIFACT}" "${ARTIFACT}.sha256" njuknow-production:/tmp/
-          ssh -F "${SSH_CONFIG}" njuknow-production "cd /tmp && sha256sum -c '${ARTIFACT}.sha256' && sudo -n /usr/local/sbin/njuknow-deploy '/tmp/${ARTIFACT}' '${RELEASE_NAME}' 0"
+          ssh -F "${SSH_CONFIG}" njuknow-production "cd /tmp && sha256sum -c '${ARTIFACT}.sha256' && sudo -n /usr/local/sbin/njuknow-deploy '/tmp/${ARTIFACT}' '${RELEASE_NAME}' '${RUN_DB_MIGRATIONS}'"
 
       - name: Verify public pages
         run: |
