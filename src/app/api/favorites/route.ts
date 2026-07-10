@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth-utils";
+import { recomputePostMetrics } from "@/lib/forum/post-metrics";
 
 export async function POST(req: Request) {
   try {
@@ -11,7 +12,7 @@ export async function POST(req: Request) {
 
     const { postId } = await req.json();
 
-    if (!postId) {
+    if (typeof postId !== "string" || !postId || postId.length > 64) {
       return NextResponse.json({ error: "帖子ID不能为空" }, { status: 400 });
     }
 
@@ -23,11 +24,13 @@ export async function POST(req: Request) {
       await db.favorite.delete({
         where: { id: existing.id },
       });
+      await recomputePostMetrics(postId);
       return NextResponse.json({ favorited: false });
     } else {
       await db.favorite.create({
         data: { userId: session.user.id, postId },
       });
+      await recomputePostMetrics(postId);
       return NextResponse.json({ favorited: true });
     }
   } catch (error) {

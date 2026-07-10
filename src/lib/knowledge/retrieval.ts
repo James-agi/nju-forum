@@ -1,315 +1,476 @@
-import type { KnowledgeCard } from "@prisma/client";
 import { db } from "@/lib/db";
-import { normalizeQuestionText } from "@/lib/knowledge/validation";
+import type { Prisma } from "@prisma/client";
+import { extractRetrievalTerms } from "@/lib/knowledge/term-extraction";
+import { scoreCard, isSpec } from "@/lib/knowledge/scoring";
+import { embedQuery } from "@/lib/knowledge/embedding";
+import { hasVectors, semanticSearch } from "@/lib/knowledge/vector-store";
+import { GENERIC, STOP } from "@/lib/knowledge/lexicon";
+import {
+  KEYWORD_TOP_CUT,
+  MAX_MERGED_TERMS,
+  RETRIEVAL_CANDIDATE_MAX_COUNT,
+  RETRIEVAL_CANDIDATE_MIN_COUNT,
+  RETRIEVAL_MIN_STRONG_GATE_TERMS,
+  SEMANTIC_TOP_K,
+  SEMANTIC_SIMILARITY_THRESHOLD,
+  RRF_K,
+} from "@/lib/knowledge/config";
+import type { RetrievalResult } from "@/lib/knowledge/types-internal";
+import {
+  CAMPUS_TERMS,
+  SERVICE_TOPICS,
+  detectCrossCampusServiceIntent,
+  detectServiceTopic,
+  textCoversServiceTopicAsMain,
+  textHasCrossCampusCoverage,
+  textCoversServiceTopic,
+} from "@/lib/knowledge/query-intent";
 
-export type RetrievalCard = Pick<
-  KnowledgeCard,
-  | "id"
-  | "summary"
-  | "body"
-  | "sourceUrl"
-  | "sourceDescription"
-  | "sourceType"
-  | "verificationStatus"
-  | "domainTag"
-  | "createdAt"
-  | "updatedAt"
-  | "archivedAt"
->;
+// ---- Re-exports for backward compatibility ----
+export type { RetrievalCard, RetrievalResult } from "@/lib/knowledge/types-internal";
+export type { EvidenceEvaluation } from "@/lib/knowledge/evidence";
+export { scoreCard } from "@/lib/knowledge/scoring";
+export { evaluateEvidence } from "@/lib/knowledge/evidence";
+export { extractRetrievalTerms } from "@/lib/knowledge/term-extraction";
 
-export interface RetrievalResult {
-  card: RetrievalCard;
-  score: number;
-  matchedTerms: string[];
-}
+// ---- Orchestrator ----
 
-export interface EvidenceEvaluation {
-  sufficient: boolean;
-  reason?: "EMPTY" | "ARCHIVED" | "UNRELATED" | "NEEDS_REVIEW";
-  cards: RetrievalResult[];
-}
-
-const STOP_TERMS = new Set([
-  "怎么",
-  "如何",
-  "什么",
-  "一下",
-  "可以",
-  "需要",
-  "有没有",
-  "请问",
-  "这个",
-  "那个",
-  "是否",
-  "能否",
-  "能不能",
-]);
-
-const GENERIC_TERMS = new Set([
-  ...Array.from(STOP_TERMS),
-  "南京",
-  "大学",
-  "南大",
-  "南京大学",
-  "学校",
-  "相关",
-  "问题",
-  "信息",
-  "内容",
-  "规定",
-  "流程",
-  "办法",
-  "申请",
-  "办理",
-  "知道",
-  "了解",
-  "新生",
-  "入学",
-  "新生入学",
-]);
-
-const SPECIFIC_SHORT_TERMS = new Set([
-  "报到",
-  "修读",
-  "选课",
-  "保研",
-  "军训",
-  "宿舍",
-  "床位",
-  "医保",
-  "学费",
-  "缴费",
-  "学籍",
-  "体检",
-  "户口",
-  "档案",
-  "院系",
-  "竞赛",
-  "科研",
-  "食堂",
-  "校车",
-  "vpn",
-  "一卡通",
-  "校园卡",
-  "图书馆",
-  "奖学金",
-  "助学金",
-  "转专业",
-  "三三制",
-]);
-
-const RETRIEVAL_ALIASES: Array<{ keywords: string[]; terms: string[] }> = [
-  { keywords: ["怎么修", "如何修", "修什么"], terms: ["修读"] },
-  { keywords: ["怎么选", "如何选"], terms: ["选课"] },
-  { keywords: ["怎么交", "如何交"], terms: ["缴费"] },
-  { keywords: ["哪里住", "住哪里"], terms: ["宿舍"] },
+const SPECIFIC_TRANSFER_MARKER_GROUPS = [
+  ["法学"],
+  ["化生", "化学", "生物"],
+  ["光电"],
+  ["cs", "计算机", "计科"],
+  ["软件", "软工"],
+  ["人工智能", "人工智能学院", "ai"],
+  ["智能科学", "智科"],
+  ["电子", "ee"],
+  ["工科试验班", "工试"],
+  ["技科", "技术科学", "技术科学试验班"],
+  ["数理", "数理大类", "数学", "物理", "天文", "天文学", "大气"],
+  ["地学", "地学大类", "地科", "地海"],
+  ["信管", "信息管理"],
+  ["德语法学"],
+  ["马克思主义"],
 ];
 
-const MIN_SUFFICIENT_SCORE = 12;
-const MIN_STRONG_TERM_COUNT = 2;
-const MIN_SINGLE_ANCHOR_SCORE = 16;
+const TRANSFER_ACTION_TERMS = [
+  "转专业",
+  "转入",
+  "转出",
+  "准入",
+  "跨大类",
+  "分流",
+  "二次选拔",
+  "拔尖",
+  "大一转",
+  "大二转",
+];
 
-function isSpecificTerm(term: string) {
-  const normalized = term.toLowerCase();
-  if (GENERIC_TERMS.has(normalized)) return false;
-  if (SPECIFIC_SHORT_TERMS.has(normalized)) return true;
-  if (/^[a-z0-9]{2,}$/i.test(normalized)) return true;
-  return normalized.length >= 3;
+const LOCATION_TERMS: string[] = [...CAMPUS_TERMS];
+const RETRIEVAL_CARD_SELECT = {
+  id: true,
+  summary: true,
+  body: true,
+  sourceExcerpt: true,
+  sourceUrl: true,
+  sourceDescription: true,
+  sourceType: true,
+  verificationStatus: true,
+  domainTag: true,
+  createdAt: true,
+  updatedAt: true,
+  archivedAt: true,
+} satisfies Prisma.KnowledgeCardSelect;
+
+const LOCATION_SENSITIVE_SERVICE_TERMS = Array.from(
+  new Set(SERVICE_TOPICS.flatMap((topic) => [...topic.queryTerms, ...topic.evidenceTerms])),
+);
+
+const WEAK_GATE_TERMS = new Set([
+  "失败",
+  "建议",
+  "分别",
+  "情况",
+  "限制",
+  "申请",
+  "流程",
+  "办理",
+  "预约",
+  "预约方式",
+  "咨询",
+  "咨询预约",
+  "中心",
+  "相关",
+  "信息",
+  "问题",
+  "可以",
+  "需要",
+  "知道",
+  "了解",
+  "哪个",
+  "哪些",
+  "哪里",
+  "哪儿",
+  "有点",
+  "弱弱",
+  "一句",
+  "经验",
+  "不确定",
+  "确定",
+  "求稳",
+  "说法",
+  "谢谢",
+  "所有",
+  "所有校区",
+  "各校区",
+  "全校区",
+  "每个校区",
+  "不同校区",
+  "汇总",
+  "对比",
+]);
+
+function includesTerm(text: string, term: string) {
+  return text.toLowerCase().includes(term.toLowerCase());
 }
 
-function scoreForTerm(term: string, field: "summary" | "body" | "domain" | "source") {
-  const specific = isSpecificTerm(term);
-
-  if (!specific) {
-    return field === "summary" ? 1 : 0;
-  }
-
-  if (field === "summary") {
-    if (term.length >= 5) return 7;
-    if (term.length >= 3) return 5;
-    return 3;
-  }
-
-  if (field === "body") {
-    if (term.length >= 5) return 5;
-    if (term.length >= 3) return 3;
-    return 1;
-  }
-
-  if (field === "domain") {
-    return term.length >= 3 ? 2 : 1;
-  }
-
-  return 1;
+function isStrongGateTerm(term: string) {
+  const normalized = term.trim().toLowerCase();
+  if (normalized.length < 2) return false;
+  if (STOP.has(normalized) || GENERIC.has(normalized)) return false;
+  if (WEAK_GATE_TERMS.has(normalized)) return false;
+  return isSpec(normalized);
 }
 
-export function extractRetrievalTerms(question: string) {
-  const normalized = normalizeQuestionText(question);
-  const terms = new Set<string>();
-
-  if (normalized.length >= 2) {
-    terms.add(normalized);
-  }
-
-  for (const alias of RETRIEVAL_ALIASES) {
-    if (alias.keywords.some((keyword) => normalized.includes(keyword))) {
-      alias.terms.forEach((term) => terms.add(term));
-    }
-  }
-
-  const chunks = normalized.match(/[0-9a-zA-Z\u3400-\u9fff]{2,}/g) ?? [];
-  for (const chunk of chunks) {
-    if (!STOP_TERMS.has(chunk)) terms.add(chunk);
-
-    if (/[\u3400-\u9fff]/.test(chunk) && chunk.length > 3) {
-      for (let size = 2; size <= Math.min(5, chunk.length); size += 1) {
-        for (let index = 0; index <= chunk.length - size; index += 1) {
-          const gram = chunk.slice(index, index + size);
-          if (!STOP_TERMS.has(gram)) terms.add(gram);
-        }
-      }
-    }
-  }
-
-  return Array.from(terms)
-    .filter((term) => term.length >= 2)
-    .sort((a, b) => b.length - a.length)
-    .slice(0, 12);
+function getKeywordGateTerms(terms: string[]) {
+  return Array.from(new Set(terms.filter(isStrongGateTerm)));
 }
 
-export function scoreCard(card: RetrievalCard, terms: string[]) {
-  const summary = card.summary.toLowerCase();
-  const body = card.body.toLowerCase();
-  const domainTag = card.domainTag.toLowerCase();
-  const sourceDescription = card.sourceDescription.toLowerCase();
-  const matchedTerms: string[] = [];
-
-  let score = 0;
-
-  for (const term of terms) {
-    const normalizedTerm = term.toLowerCase();
-    let matched = false;
-
-    if (summary.includes(normalizedTerm)) {
-      score += scoreForTerm(normalizedTerm, "summary");
-      matched = true;
-    }
-
-    if (body.includes(normalizedTerm)) {
-      score += scoreForTerm(normalizedTerm, "body");
-      matched = true;
-    }
-
-    if (domainTag.includes(normalizedTerm)) {
-      score += scoreForTerm(normalizedTerm, "domain");
-      matched = true;
-    }
-
-    if (sourceDescription.includes(normalizedTerm)) {
-      score += scoreForTerm(normalizedTerm, "source");
-      matched = true;
-    }
-
-    if (matched) matchedTerms.push(term);
-  }
-
-  if (card.verificationStatus === "VERIFIED") score += 1;
-  if (card.verificationStatus === "NEEDS_REVIEW") score -= 1;
-  if (card.sourceType === "OFFICIAL") score += 1;
+function buildCandidateWhere(gateTerms: string[]): Prisma.KnowledgeCardWhereInput {
+  const contains = (term: string) => ({ contains: term, mode: "insensitive" as const });
 
   return {
-    score: Math.max(0, score),
-    matchedTerms: Array.from(new Set(matchedTerms)),
+    archivedAt: null,
+    OR: gateTerms.flatMap((term) => [
+      { summary: contains(term) },
+      { body: contains(term) },
+      { sourceExcerpt: contains(term) },
+      { sourceDescription: contains(term) },
+      { domainTag: contains(term) },
+    ]),
   };
 }
 
-function hasStrongEvidence(result: RetrievalResult) {
-  const summary = result.card.summary.toLowerCase();
-  const body = result.card.body.toLowerCase();
-  const strongTerms = result.matchedTerms.filter(isSpecificTerm);
-  const contentStrongTerms = strongTerms.filter((term) => {
-    const normalized = term.toLowerCase();
-    return summary.includes(normalized) || body.includes(normalized);
+async function findAllActiveCards() {
+  return db.knowledgeCard.findMany({
+    where: { archivedAt: null },
+    select: RETRIEVAL_CARD_SELECT,
   });
-  const hasLongContentAnchor = contentStrongTerms.some((term) => term.length >= 4);
-  const hasMultipleContentAnchors = contentStrongTerms.length >= MIN_STRONG_TERM_COUNT;
-
-  return (
-    result.score >= MIN_SUFFICIENT_SCORE &&
-    (hasMultipleContentAnchors ||
-      (hasLongContentAnchor && result.score >= MIN_SINGLE_ANCHOR_SCORE))
-  );
 }
 
-export async function retrieveKnowledgeCards(question: string, limit = 5) {
-  const terms = extractRetrievalTerms(question);
-  if (terms.length === 0) return [];
+async function findSafeCandidateCards(gateTerms: string[]) {
+  if (gateTerms.length < RETRIEVAL_MIN_STRONG_GATE_TERMS) {
+    return null;
+  }
 
-  const orFilters = terms.flatMap((term) => [
-    { summary: { contains: term, mode: "insensitive" as const } },
-    { body: { contains: term, mode: "insensitive" as const } },
-    { domainTag: { contains: term, mode: "insensitive" as const } },
-    { sourceDescription: { contains: term, mode: "insensitive" as const } },
-  ]);
+  const where = buildCandidateWhere(gateTerms);
+  const candidateCount = await db.knowledgeCard.count({ where });
 
-  const cards = await db.knowledgeCard.findMany({
-    where: {
-      archivedAt: null,
-      OR: orFilters,
-    },
-    take: 50,
-    orderBy: [{ verificationStatus: "asc" }, { updatedAt: "desc" }],
-    select: {
-      id: true,
-      summary: true,
-      body: true,
-      sourceUrl: true,
-      sourceDescription: true,
-      sourceType: true,
-      verificationStatus: true,
-      domainTag: true,
-      createdAt: true,
-      updatedAt: true,
-      archivedAt: true,
-    },
+  if (
+    candidateCount < RETRIEVAL_CANDIDATE_MIN_COUNT ||
+    candidateCount > RETRIEVAL_CANDIDATE_MAX_COUNT
+  ) {
+    return null;
+  }
+
+  return db.knowledgeCard.findMany({
+    where,
+    select: RETRIEVAL_CARD_SELECT,
   });
+}
+
+function cardMatchesKeywordGate(card: RetrievalResult["card"], gateTerms: string[]) {
+  if (gateTerms.length === 0) return false;
+
+  const searchable = [
+    card.summary,
+    card.body,
+    card.sourceExcerpt ?? "",
+    card.sourceDescription,
+    card.domainTag,
+  ].join("\n");
+
+  return gateTerms.some((term) => includesTerm(searchable, term));
+}
+
+function cardSearchText(card: RetrievalResult["card"]) {
+  return [
+    card.summary,
+    card.body,
+    card.sourceExcerpt ?? "",
+    card.sourceDescription,
+    card.domainTag,
+  ].join("\n");
+}
+
+function namesDifferentLocationContext(card: RetrievalResult["card"], terms: string[]) {
+  const queryLocations = terms.filter((term) => LOCATION_TERMS.includes(term));
+  if (queryLocations.length === 0) return false;
+
+  const summary = card.summary.toLowerCase();
+  const summaryLocations = LOCATION_TERMS.filter((term) => summary.includes(term.toLowerCase()));
+  if (summaryLocations.length === 0) return false;
+
+  return !summaryLocations.some((term) => queryLocations.includes(term));
+}
+
+function namesLocationWithoutQueryContext(card: RetrievalResult["card"], terms: string[], question: string) {
+  if (detectCrossCampusServiceIntent(question, terms)) return false;
+  if (terms.some((term) => LOCATION_TERMS.includes(term))) return false;
+  if (!terms.some((term) => LOCATION_SENSITIVE_SERVICE_TERMS.includes(term))) return false;
+
+  const summary = card.summary.toLowerCase();
+  return LOCATION_TERMS.some((term) => summary.includes(term.toLowerCase())) &&
+    LOCATION_SENSITIVE_SERVICE_TERMS.some((term) => summary.includes(term.toLowerCase()));
+}
+
+function isLocationNeutralServiceCard(card: RetrievalResult["card"], terms: string[]) {
+  if (terms.some((term) => LOCATION_TERMS.includes(term))) return false;
+  if (!terms.some((term) => LOCATION_SENSITIVE_SERVICE_TERMS.includes(term))) return false;
+
+  const summary = card.summary.toLowerCase();
+  return !LOCATION_TERMS.some((term) => summary.includes(term.toLowerCase())) &&
+    LOCATION_SENSITIVE_SERVICE_TERMS.some((term) => summary.includes(term.toLowerCase()));
+}
+
+function missesQueryServiceTopic(card: RetrievalResult["card"], question: string, terms: string[]) {
+  const topic = detectServiceTopic(question, terms);
+  if (!topic) return false;
+  return !textCoversServiceTopic(cardSearchText(card), topic);
+}
+
+function coversQueryServiceTopic(card: RetrievalResult["card"], question: string, terms: string[]) {
+  const topic = detectServiceTopic(question, terms);
+  if (!topic) return false;
+  return textCoversServiceTopic(cardSearchText(card), topic);
+}
+
+function coversCrossCampusServiceIntent(card: RetrievalResult["card"], question: string, terms: string[]) {
+  const intent = detectCrossCampusServiceIntent(question, terms);
+  if (!intent) return false;
+
+  const titleText = `${card.summary}\n${card.domainTag}`;
+  const bodyText = `${card.body}\n${card.sourceExcerpt || ""}`;
+  return textCoversServiceTopicAsMain(titleText, bodyText, intent.topic) &&
+    textHasCrossCampusCoverage(titleText, cardSearchText(card));
+}
+
+function isTransferQuery(question: string, terms: string[]) {
+  const normalized = question.toLowerCase();
+  return normalized.includes("转专业") ||
+    normalized.includes("换专业") ||
+    normalized.includes("跨大类准入") ||
+    terms.some((term) => ["转专业", "换专业", "专业转换", "跨大类准入"].includes(term.toLowerCase()));
+}
+
+function findSpecificTransferMarkerGroups(text: string) {
+  const normalized = text.toLowerCase();
+  const matched = new Set<number>();
+  SPECIFIC_TRANSFER_MARKER_GROUPS.forEach((markers, index) => {
+    if (markers.some((marker) => normalized.includes(marker))) {
+      matched.add(index);
+    }
+  });
+  return matched;
+}
+
+function countSharedSpecificTransferGroups(question: string, card: RetrievalResult["card"]) {
+  const questionGroups = findSpecificTransferMarkerGroups(question);
+  if (questionGroups.size === 0) return 0;
+
+  const cardGroups = findSpecificTransferMarkerGroups(`${card.summary}\n${card.body}`);
+  let shared = 0;
+  questionGroups.forEach((group) => {
+    if (cardGroups.has(group)) shared += 1;
+  });
+  return shared;
+}
+
+function namesDifferentSpecificTransferContext(question: string, card: RetrievalResult["card"]) {
+  const summaryGroups = findSpecificTransferMarkerGroups(card.summary);
+  if (summaryGroups.size === 0) return false;
+
+  const questionGroups = findSpecificTransferMarkerGroups(question);
+  if (questionGroups.size === 0) return true;
+
+  return !Array.from(summaryGroups).some((group) => questionGroups.has(group));
+}
+
+function hasTransferActionContext(card: RetrievalResult["card"], matchedTerms: string[]) {
+  const normalizedText = `${card.summary}\n${card.body}`.toLowerCase();
+  return TRANSFER_ACTION_TERMS.some((term) => {
+    const normalizedTerm = term.toLowerCase();
+    return matchedTerms.some((matched) => matched.toLowerCase() === normalizedTerm) ||
+      normalizedText.includes(normalizedTerm);
+  });
+}
+
+function adjustContextualScore(
+  card: RetrievalResult["card"],
+  score: number,
+  question: string,
+  terms: string[],
+  matchedTerms: string[],
+) {
+  const hasCrossCampusServiceIntent = Boolean(detectCrossCampusServiceIntent(question, terms));
+  if (hasCrossCampusServiceIntent && !coversCrossCampusServiceIntent(card, question, terms)) {
+    return 0;
+  }
+
+  if (missesQueryServiceTopic(card, question, terms)) {
+    return 0;
+  }
+
+  if (namesDifferentLocationContext(card, terms)) {
+    score = 0;
+  }
+
+  if (namesLocationWithoutQueryContext(card, terms, question)) {
+    score = Math.max(0, score - 3);
+  }
+
+  if (isLocationNeutralServiceCard(card, terms)) {
+    score += 8;
+  }
+
+  if (hasCrossCampusServiceIntent && coversQueryServiceTopic(card, question, terms)) {
+    score += 4;
+  }
+
+  if (isTransferQuery(question, terms)) {
+    if (!hasTransferActionContext(card, matchedTerms)) {
+      score = 0;
+    }
+
+    const sharedSpecificGroups = countSharedSpecificTransferGroups(question, card);
+    if (sharedSpecificGroups >= 2) {
+      score += 6;
+    }
+
+    if (namesDifferentSpecificTransferContext(question, card)) {
+      score = Math.max(0, score - 10);
+    }
+  }
+
+  return score;
+}
+
+export async function retrieveKnowledgeCards(
+  question: string,
+  limit = 5,
+  extraTerms: string[] = [],
+): Promise<RetrievalResult[]> {
+  const baseTerms = await extractRetrievalTerms(question);
+  const merged = new Set([...baseTerms, ...extraTerms.filter((t) => t.length >= 2)]);
+  const terms = Array.from(merged).slice(0, MAX_MERGED_TERMS);
+  const gateTerms = getKeywordGateTerms(terms);
+
+  if (terms.length === 0 || gateTerms.length === 0) return [];
+
+  const cards = (await findSafeCandidateCards(gateTerms)) ?? await findAllActiveCards();
 
   return cards
-    .map((card) => ({
-      card,
-      ...scoreCard(card, terms),
-    }))
-    .filter((result) => result.score > 0)
+    .filter((c) => cardMatchesKeywordGate(c, gateTerms))
+    .map((c) => {
+      const scored = scoreCard(c, terms);
+      return {
+        card: c,
+        question,
+        queryTerms: terms,
+        originalQueryTerms: baseTerms,
+        ...scored,
+        score: adjustContextualScore(c, scored.score, question, terms, scored.matchedTerms),
+      };
+    })
+    .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || b.card.updatedAt.getTime() - a.card.updatedAt.getTime())
     .slice(0, limit);
 }
 
-export function evaluateEvidence(results: RetrievalResult[]): EvidenceEvaluation {
-  if (results.length === 0) {
-    return { sufficient: false, reason: "EMPTY", cards: [] };
+export async function retrieveHybrid(
+  question: string,
+  limit = 5,
+  extraTerms: string[] = [],
+): Promise<RetrievalResult[]> {
+  const keywordResults = await retrieveKnowledgeCards(question, KEYWORD_TOP_CUT, extraTerms);
+
+  let semanticCardIds: string[] = [];
+  if (await hasVectors()) {
+    const queryVec = await embedQuery(question);
+    if (queryVec) {
+      const semResults = await semanticSearch(queryVec, SEMANTIC_TOP_K);
+      semanticCardIds = semResults
+        .filter((r) => r.similarity > SEMANTIC_SIMILARITY_THRESHOLD)
+        .map((r) => r.cardId);
+    }
   }
 
-  const active = results.filter((result) => !result.card.archivedAt);
-  if (active.length === 0) {
-    return { sufficient: false, reason: "ARCHIVED", cards: [] };
+  if (semanticCardIds.length === 0) {
+    return keywordResults.slice(0, limit);
   }
 
-  const topScore = active[0]?.score ?? 0;
-  if (topScore < MIN_SUFFICIENT_SCORE || !hasStrongEvidence(active[0])) {
-    return { sufficient: false, reason: "UNRELATED", cards: [] };
+  const rrfScores = new Map<string, number>();
+
+  keywordResults.forEach((r, idx) => {
+    rrfScores.set(r.card.id, (rrfScores.get(r.card.id) || 0) + 1 / (RRF_K + idx + 1));
+  });
+
+  semanticCardIds.forEach((cardId, idx) => {
+    rrfScores.set(cardId, (rrfScores.get(cardId) || 0) + 1 / (RRF_K + idx + 1));
+  });
+
+  const keywordCardIds = new Set(keywordResults.map((r) => r.card.id));
+  const missingIds = semanticCardIds.filter((id) => !keywordCardIds.has(id));
+
+  let semanticOnlyResults: RetrievalResult[] = [];
+  if (missingIds.length > 0) {
+    const terms = await extractRetrievalTerms(question);
+    const allTerms = Array.from(new Set([...terms, ...extraTerms.filter((t) => t.length >= 2)]));
+    const gateTerms = getKeywordGateTerms(allTerms);
+    const cards = await db.knowledgeCard.findMany({
+      where: { id: { in: missingIds }, archivedAt: null },
+      select: RETRIEVAL_CARD_SELECT,
+    });
+    semanticOnlyResults = cards
+      .filter((c) => cardMatchesKeywordGate(c, gateTerms))
+      .map((c) => {
+        const scored = scoreCard(c, allTerms);
+        return {
+          card: c,
+          question,
+          queryTerms: allTerms,
+          originalQueryTerms: terms,
+          ...scored,
+          score: adjustContextualScore(c, scored.score, question, allTerms, scored.matchedTerms),
+        };
+      })
+      .filter((r) => r.score > 0);
   }
 
-  const usable = active
-    .filter(
-      (result) =>
-        result.score >= Math.max(MIN_SUFFICIENT_SCORE, topScore - 2) &&
-        hasStrongEvidence(result)
-    )
-    .slice(0, 3);
+  const allResults = [...keywordResults, ...semanticOnlyResults];
+  const resultMap = new Map(allResults.map((r) => [r.card.id, r]));
 
-  if (usable.every((result) => result.card.verificationStatus === "NEEDS_REVIEW")) {
-    return { sufficient: false, reason: "NEEDS_REVIEW", cards: [] };
+  const rrfSorted = Array.from(rrfScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([cardId]) => resultMap.get(cardId))
+    .filter((r): r is RetrievalResult => !!r);
+
+  const merged = new Map<string, RetrievalResult>();
+  for (const result of keywordResults.slice(0, limit)) merged.set(result.card.id, result);
+  for (const result of rrfSorted) {
+    if (merged.size >= limit) break;
+    merged.set(result.card.id, result);
   }
 
-  return { sufficient: true, cards: usable };
+  return Array.from(merged.values()).slice(0, limit);
 }

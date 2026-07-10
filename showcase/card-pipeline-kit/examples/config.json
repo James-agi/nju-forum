@@ -1,0 +1,15 @@
+{
+  "projectName": "Source-to-card pipeline demo",
+  "rulesFile": "./card-rules.md",
+  "agentCommandTemplate": "",
+  "review": {
+    "enabled": true,
+    "prompt": "Review the cards from a reader's perspective. Identify unsupported claims, missing prerequisites, unclear scope, and stale information. Then update cards.json and iteration.md."
+  },
+  "sources": [
+    {
+      "title": "Example employee service guide",
+      "url": "https://docs.example.org/employee-service-guide"
+    }
+  ]
+}

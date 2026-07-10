@@ -1,0 +1,305 @@
+[
+  {
+    "id": "fact-1",
+    "question": "转专业需要什么条件？",
+    "scenario": "A-直接事实",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["转专业"],
+    "mustMention": ["绩点", "GPA"],
+    "mustNotMention": []
+  },
+  {
+    "id": "fact-2",
+    "question": "三三制是什么？",
+    "scenario": "A-直接事实",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["三三制"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "fact-3",
+    "question": "学分绩怎么算？",
+    "scenario": "A-直接事实",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["学分绩"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "fact-4",
+    "question": "怎么用南大VPN？",
+    "scenario": "A-直接事实",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["VPN"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "fact-5",
+    "question": "辅修怎么申请？",
+    "scenario": "A-直接事实",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["辅修"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "fact-6",
+    "question": "南大图书馆开放时间是什么时候？",
+    "scenario": "A-直接事实",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["图书馆"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "fact-7",
+    "question": "南京大学校训是什么？",
+    "scenario": "A-直接事实",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["校训"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "rephrase-1",
+    "question": "保研怎么搞？",
+    "scenario": "B-改述口语",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["保研", "推免"],
+    "mustMention": [],
+    "mustNotMention": [],
+    "notes": "口语'搞'代替正式说法，Phase0已知失败锚点"
+  },
+  {
+    "id": "rephrase-2",
+    "question": "宿舍几人间？",
+    "scenario": "B-改述口语",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["宿舍"],
+    "mustMention": [],
+    "mustNotMention": [],
+    "notes": "Phase0已知失败锚点 topScore=6"
+  },
+  {
+    "id": "rephrase-3",
+    "question": "学费怎么交？",
+    "scenario": "B-改述口语",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["学费", "缴费"],
+    "mustMention": [],
+    "mustNotMention": [],
+    "notes": "Phase0已知失败锚点"
+  },
+  {
+    "id": "rephrase-4",
+    "question": "饭卡丢了怎么办？",
+    "scenario": "B-改述口语",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["一卡通", "校园卡"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "rephrase-5",
+    "question": "南大怎么查成绩？",
+    "scenario": "B-改述口语",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["成绩"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "multi-1",
+    "question": "新生入学要准备什么？",
+    "scenario": "C-综合多卡",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": [],
+    "notes": "应引用>=2张卡，minCiteCount=2"
+  },
+  {
+    "id": "multi-2",
+    "question": "大一新生选课有什么建议？",
+    "scenario": "C-综合多卡",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["选课"],
+    "mustMention": [],
+    "mustNotMention": [],
+    "notes": "minCiteCount=2"
+  },
+  {
+    "id": "multi-3",
+    "question": "南大有哪些奖学金可以申请？",
+    "scenario": "C-综合多卡",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["奖学金"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "gap-1",
+    "question": "南大心理咨询中心怎么预约？",
+    "scenario": "D-库内无答案",
+    "expectedStatus": "GAP_RECORDED",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "gap-2",
+    "question": "南大体育课怎么抢课？",
+    "scenario": "D-库内无答案",
+    "expectedStatus": "GAP_RECORDED",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "gap-3",
+    "question": "南大校医院报销流程？",
+    "scenario": "D-库内无答案",
+    "expectedStatus": "GAP_RECORDED",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "gap-4",
+    "question": "南大研究生宿舍怎么申请？",
+    "scenario": "D-库内无答案",
+    "expectedStatus": "GAP_RECORDED",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "gap-5",
+    "question": "交换生的学分怎么转换？",
+    "scenario": "D-库内无答案",
+    "expectedStatus": "GAP_RECORDED",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "oos-1",
+    "question": "今天天气怎么样？",
+    "scenario": "E-域外",
+    "expectedStatus": "OUT_OF_SCOPE",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "oos-2",
+    "question": "帮我写一篇论文摘要",
+    "scenario": "E-域外",
+    "expectedStatus": "OUT_OF_SCOPE",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "oos-3",
+    "question": "讲个笑话",
+    "scenario": "E-域外",
+    "expectedStatus": "OUT_OF_SCOPE",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "oos-4",
+    "question": "帮我写代码",
+    "scenario": "E-域外",
+    "expectedStatus": "OUT_OF_SCOPE",
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "fp-1",
+    "question": "食堂物价大概多少？",
+    "scenario": "F-误杀回归",
+    "expectedStatus": null,
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": [],
+    "mustNotStatus": "OUT_OF_SCOPE",
+    "notes": "scope黑名单'价格'可能误杀"
+  },
+  {
+    "id": "fp-2",
+    "question": "作业提交系统怎么用？",
+    "scenario": "F-误杀回归",
+    "expectedStatus": null,
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": [],
+    "mustNotStatus": "OUT_OF_SCOPE",
+    "notes": "scope黑名单'作业'可能误杀"
+  },
+  {
+    "id": "fp-3",
+    "question": "论坛怎么注册？",
+    "scenario": "F-误杀回归",
+    "expectedStatus": null,
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": [],
+    "mustNotStatus": "OUT_OF_SCOPE",
+    "notes": "scope黑名单'论坛/发帖'可能误杀"
+  },
+  {
+    "id": "halluc-1",
+    "question": "南大要求四级600分才能毕业对吗？",
+    "scenario": "G-幻觉诱导",
+    "expectedStatus": null,
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": ["600分"],
+    "notes": "错误前提，不应复读'600分'"
+  },
+  {
+    "id": "halluc-2",
+    "question": "听说南大GPA满分是5分？",
+    "scenario": "G-幻觉诱导",
+    "expectedStatus": null,
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": ["满分是5分", "满分5分"],
+    "notes": "错误前提"
+  },
+  {
+    "id": "halluc-3",
+    "question": "听说南大转专业只要申请就能过？",
+    "scenario": "G-幻觉诱导",
+    "expectedStatus": null,
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": ["只要申请就能过"],
+    "notes": "错误前提"
+  },
+  {
+    "id": "fresh-1",
+    "question": "选课什么时候开始？",
+    "scenario": "H-时效",
+    "expectedStatus": "ANSWERED",
+    "mustCiteCardSummaries": ["选课"],
+    "mustMention": [],
+    "mustNotMention": []
+  },
+  {
+    "id": "fresh-2",
+    "question": "转专业政策最近有变化吗？",
+    "scenario": "H-时效",
+    "expectedStatus": null,
+    "mustCiteCardSummaries": [],
+    "mustMention": [],
+    "mustNotMention": [],
+    "notes": "优先引用新卡"
+  }
+]

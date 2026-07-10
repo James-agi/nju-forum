@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MessageSquare } from "lucide-react";
+import { PostContent } from "@/components/forum/post-content";
 import { ReplyForm } from "./reply-form";
 
 interface Reply {
   id: string;
   content: string;
+  images: string[];
   createdAt: Date;
   author: {
     id: string;
@@ -23,15 +25,27 @@ interface ReplyListProps {
   replies: Reply[];
   postId: string;
   depth?: number;
+  canReply?: boolean;
 }
 
-function ReplyItem({ reply, postId, depth = 0 }: { reply: Reply; postId: string; depth: number }) {
+function ReplyItem({
+  reply,
+  postId,
+  depth = 0,
+  canReply = true,
+}: {
+  reply: Reply;
+  postId: string;
+  depth: number;
+  canReply?: boolean;
+}) {
   const [showReplyForm, setShowReplyForm] = useState(false);
 
   return (
-    <div className={depth > 0 ? "ml-8 border-l-2 border-muted pl-4" : ""}>
+    <div className={depth > 0 ? "ml-4 border-l-2 border-muted pl-3 sm:ml-8 sm:pl-4" : ""}>
       <div className="flex gap-3 py-3">
         <Avatar className="h-8 w-8 shrink-0">
+          <AvatarImage src={reply.author.avatar ?? undefined} alt={reply.author.name} />
           <AvatarFallback className="text-xs">
             {reply.author.name.charAt(0)}
           </AvatarFallback>
@@ -43,7 +57,7 @@ function ReplyItem({ reply, postId, depth = 0 }: { reply: Reply; postId: string;
               {new Date(reply.createdAt).toLocaleString("zh-CN")}
             </span>
           </div>
-          <p className="text-sm whitespace-pre-wrap">{reply.content}</p>
+          <PostContent content={reply.content} images={reply.images} className="text-sm" />
           <Button
             variant="ghost"
             size="sm"
@@ -58,6 +72,7 @@ function ReplyItem({ reply, postId, depth = 0 }: { reply: Reply; postId: string;
               <ReplyForm
                 postId={postId}
                 parentId={reply.id}
+                canReply={canReply}
                 onCancel={() => setShowReplyForm(false)}
                 placeholder={`回复 ${reply.author.name}...`}
               />
@@ -66,13 +81,19 @@ function ReplyItem({ reply, postId, depth = 0 }: { reply: Reply; postId: string;
         </div>
       </div>
       {reply.children?.map((child) => (
-        <ReplyItem key={child.id} reply={child} postId={postId} depth={depth + 1} />
+        <ReplyItem
+          key={child.id}
+          reply={child}
+          postId={postId}
+          depth={depth + 1}
+          canReply={canReply}
+        />
       ))}
     </div>
   );
 }
 
-export function ReplyList({ replies, postId }: ReplyListProps) {
+export function ReplyList({ replies, postId, canReply = true }: ReplyListProps) {
   if (replies.length === 0) {
     return (
       <Card>
@@ -86,7 +107,13 @@ export function ReplyList({ replies, postId }: ReplyListProps) {
   return (
     <div className="divide-y">
       {replies.map((reply) => (
-        <ReplyItem key={reply.id} reply={reply} postId={postId} depth={0} />
+        <ReplyItem
+          key={reply.id}
+          reply={reply}
+          postId={postId}
+          depth={0}
+          canReply={canReply}
+        />
       ))}
     </div>
   );

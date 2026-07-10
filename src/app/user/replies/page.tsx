@@ -3,7 +3,11 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth-utils";
 import { db } from "@/lib/db";
 import { Card, CardContent } from "@/components/ui/card";
+import { SectionLabel } from "@/components/ui/section-label";
 import { Clock } from "lucide-react";
+import { getPostTextPreview } from "@/lib/forum/post-preview";
+
+export const dynamic = "force-dynamic";
 
 export default async function UserRepliesPage() {
   const session = await getSession();
@@ -18,18 +22,18 @@ export default async function UserRepliesPage() {
   });
 
   return (
-    <div className="container mx-auto max-w-4xl px-4 py-6">
-      <h1 className="text-2xl font-bold mb-6">我的回复</h1>
-      <div className="space-y-3">
+    <div className="container mx-auto max-w-4xl px-4 py-8">
+      <SectionLabel en="User · 我的回复" zh="我的回复" />
+      <div className="mt-8 space-y-3 animate-fade-in">
         {replies.map((reply) => (
           <Link key={reply.id} href={`/forum/post/${reply.postId}`}>
-            <Card className="transition-colors hover:bg-muted/50 cursor-pointer">
+            <Card className="transition-colors hover:bg-muted/30 cursor-pointer border-border">
               <CardContent className="p-4">
                 <p className="text-sm text-muted-foreground mb-1">
                   回复了帖子：{reply.post.title}
                 </p>
-                <p className="text-sm truncate">{reply.content}</p>
-                <span className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                <p className="text-sm truncate">{getPostTextPreview(reply.content, 2)}</p>
+                <span className="inline-flex items-center gap-1 mt-2 text-xs text-muted-foreground">
                   <Clock className="h-3 w-3" />
                   {new Date(reply.createdAt).toLocaleString("zh-CN")}
                 </span>

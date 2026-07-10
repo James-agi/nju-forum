@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  GAP_TYPES,
+  KNOWLEDGE_ANSWER_MODES,
   SOURCE_TYPES,
   VERIFICATION_STATUSES,
 } from "@/lib/knowledge/types";
@@ -31,14 +33,30 @@ const optionalId = z.preprocess(
 
 const GAP_UPDATE_STATUSES = ["HANDLED", "DUPLICATE", "OUT_OF_SCOPE"] as const;
 
+const optionalText = (name: string, max = 12000) =>
+  z.preprocess((value) => {
+    if (typeof value !== "string") return value;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().max(max, `${name}过长`).optional());
+
+const IMAGE_MARKDOWN_PATTERN = /!\[[^\]\n]*\]\([^)]+\)/;
+
 export const cardCreateSchema = z.object({
   summary: trimmedRequired("摘要", 200),
-  body: trimmedRequired("正文", 12000),
+  body: trimmedRequired("正文", 12000).refine(
+    (value) => !IMAGE_MARKDOWN_PATTERN.test(value),
+    "正文不能包含图片 Markdown；图片请放在原文摘录 sourceExcerpt"
+  ),
+  sourceExcerpt: optionalText("原文摘录", 12000),
   sourceUrl: optionalUrl,
+  sourceUrls: z.array(z.string().url()).optional(),
   sourceDescription: trimmedRequired("来源说明", 500),
   sourceType: z.enum(SOURCE_TYPES),
   verificationStatus: z.enum(VERIFICATION_STATUSES),
-  domainTag: trimmedRequired("领域标签", 80),
+  domainTag: trimmedRequired("领域标签", 40),
+  action: z.enum(["create", "merge"]).optional(),
+  mergeWithSummary: z.string().trim().max(200).nullish(),
 });
 
 export const cardUpdateSchema = cardCreateSchema.partial().extend({
@@ -47,15 +65,26 @@ export const cardUpdateSchema = cardCreateSchema.partial().extend({
 
 export const askRequestSchema = z.object({
   question: trimmedRequired("问题", 500).min(2, "问题至少需要 2 个字符"),
+  conversationId: z.string().optional(),
+  mode: z.enum(KNOWLEDGE_ANSWER_MODES).default("think"),
 });
 
 export const gapUpdateSchema = z
   .object({
-    status: z.enum(GAP_UPDATE_STATUSES),
+    status: z.enum(GAP_UPDATE_STATUSES).optional(),
+    gapType: z.enum(GAP_TYPES).optional(),
     linkedCardId: optionalId,
     duplicateOfId: optionalId,
   })
   .superRefine((value, ctx) => {
+    if (value.status === undefined && value.gapType === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["status"],
+        message: "至少需要更新状态或类型之一",
+      });
+    }
+
     if (value.status === "HANDLED" && !value.linkedCardId) {
       ctx.addIssue({
         code: "custom",

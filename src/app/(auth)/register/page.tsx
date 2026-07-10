@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -13,28 +13,92 @@ export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
     email: "",
+    verificationCode: "",
     name: "",
     password: "",
     confirmPassword: "",
   });
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [codeSent, setCodeSent] = useState(false);
+
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const timer = window.setTimeout(() => setCountdown((current) => current - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [countdown]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const handleSendCode = async () => {
+    setError("");
+    setMessage("");
+
+    if (!form.email) {
+      setError("请先填写邮箱");
+      return;
+    }
+
+    if (!isValidEmail(form.email)) {
+      setError("请输入有效的邮箱地址");
+      return;
+    }
+
+    setSendingCode(true);
+
+    try {
+      const res = await fetch("/api/send-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "验证码发送失败");
+        return;
+      }
+
+      setCodeSent(true);
+      setCountdown(60);
+      setMessage("验证码已发送，请检查邮箱");
+    } catch {
+      setError("验证码发送失败，请稍后再试");
+    } finally {
+      setSendingCode(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setMessage("");
 
     if (form.password !== form.confirmPassword) {
       setError("两次密码不一致");
       return;
     }
 
-    if (!form.email.endsWith("@nju.edu.cn")) {
-      setError("必须使用南大邮箱 @nju.edu.cn");
+    if (form.password.length < 10 || form.password.length > 128) {
+      setError("密码长度需为 10-128 位");
+      return;
+    }
+
+    if (!isValidEmail(form.email)) {
+      setError("请输入有效的邮箱地址");
+      return;
+    }
+
+    if (!form.verificationCode.trim()) {
+      setError("请先输入邮箱验证码");
       return;
     }
 
@@ -65,11 +129,11 @@ export default function RegisterPage() {
     <div className="flex min-h-[calc(100vh-3.5rem)] items-center justify-center">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <BookOpen className="h-6 w-6 text-primary" />
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center border border-border bg-secondary">
+            <BookOpen className="h-6 w-6 text-foreground" />
           </div>
-          <CardTitle className="text-2xl">注册南大论坛</CardTitle>
-          <CardDescription>仅限 @nju.edu.cn 邮箱</CardDescription>
+          <CardTitle className="text-2xl">注册知南</CardTitle>
+          <CardDescription>使用任意有效邮箱注册</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -78,18 +142,51 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
+            {message && (
+              <div className="rounded-md bg-primary/10 p-3 text-sm text-primary">
+                {message}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">邮箱</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="your@nju.edu.cn"
-                value={form.email}
-                onChange={handleChange}
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={handleChange}
+                  maxLength={254}
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSendCode}
+                  disabled={sendingCode || countdown > 0}
+                >
+                  {sendingCode ? "发送中..." : countdown > 0 ? `已发送(${countdown}s)` : "发送验证码"}
+                </Button>
+              </div>
             </div>
+            {codeSent && (
+              <div className="space-y-2">
+                <Label htmlFor="verificationCode">验证码</Label>
+                <Input
+                  id="verificationCode"
+                  name="verificationCode"
+                  type="text"
+                  placeholder="输入 6 位验证码"
+                  value={form.verificationCode}
+                  onChange={handleChange}
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  required
+                />
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="name">昵称</Label>
               <Input
@@ -99,6 +196,8 @@ export default function RegisterPage() {
                 placeholder="2-20个字符"
                 value={form.name}
                 onChange={handleChange}
+                minLength={2}
+                maxLength={20}
                 required
               />
             </div>
@@ -108,9 +207,11 @@ export default function RegisterPage() {
                 id="password"
                 name="password"
                 type="password"
-                placeholder="至少6位"
+                placeholder="10-128 位"
                 value={form.password}
                 onChange={handleChange}
+                minLength={10}
+                maxLength={128}
                 required
               />
             </div>
@@ -123,6 +224,8 @@ export default function RegisterPage() {
                 placeholder="再次输入密码"
                 value={form.confirmPassword}
                 onChange={handleChange}
+                minLength={10}
+                maxLength={128}
                 required
               />
             </div>

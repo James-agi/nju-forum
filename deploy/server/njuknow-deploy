@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEPLOY_SCRIPT="/usr/local/lib/njuknow/deploy-artifact-production.sh"
+DEPLOY_USER="njuknowdeploy"
+
+if [ "$(id -u)" -ne 0 ] || [ "${SUDO_USER:-}" != "${DEPLOY_USER}" ]; then
+  echo "ERROR: this command must be invoked by ${DEPLOY_USER} through sudo."
+  exit 1
+fi
+
+if [ "$#" -ne 3 ]; then
+  echo "Usage: njuknow-deploy /tmp/njuknow-release.tar.gz release-name run-migrations"
+  exit 1
+fi
+
+artifact_path="$(realpath -e -- "$1")"
+release_name="$2"
+run_migrations="$3"
+
+case "${artifact_path}" in
+  /tmp/njuknow-*.tar.gz) ;;
+  *)
+    echo "ERROR: artifact must be an existing /tmp/njuknow-*.tar.gz file."
+    exit 1
+    ;;
+esac
+
+case "${release_name}" in
+  *[!A-Za-z0-9._-]* | "")
+    echo "ERROR: invalid release name."
+    exit 1
+    ;;
+esac
+
+if [ "${run_migrations}" != "0" ] && [ "${run_migrations}" != "1" ]; then
+  echo "ERROR: run-migrations must be 0 or 1."
+  exit 1
+fi
+
+if [ "$(stat -c %U "${artifact_path}")" != "${DEPLOY_USER}" ]; then
+  echo "ERROR: artifact is not owned by ${DEPLOY_USER}."
+  exit 1
+fi
+
+if [ "$(stat -c %s "${artifact_path}")" -gt 2147483648 ]; then
+  echo "ERROR: artifact exceeds the 2GiB deployment limit."
+  exit 1
+fi
+
+if [ ! -x "${DEPLOY_SCRIPT}" ]; then
+  echo "ERROR: the root-owned deployment script is not installed."
+  exit 1
+fi
+
+cleanup() {
+  rm -f -- "${artifact_path}" "${artifact_path}.sha256"
+}
+trap cleanup EXIT
+
+env -i \
+  PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+  RELEASE_NAME="${release_name}" \
+  RUN_DB_MIGRATIONS="${run_migrations}" \
+  DEPLOY_OWNER="${DEPLOY_USER}" \
+  "${DEPLOY_SCRIPT}" "${artifact_path}"

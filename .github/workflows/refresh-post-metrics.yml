@@ -1,0 +1,33 @@
+name: Refresh post metrics
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: refresh-post-metrics
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.event_name == 'schedule' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    timeout-minutes: 10
+
+    env:
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      METRICS_REFRESH_URL: ${{ vars.METRICS_REFRESH_URL }}
+
+    steps:
+      - name: Refresh post metrics
+        run: |
+          set -euo pipefail
+          test -n "${CRON_SECRET}"
+          URL="${METRICS_REFRESH_URL:-https://njuknow.xyz/api/cron/refresh-post-metrics}"
+          curl --proto '=https' --tlsv1.2 --retry 2 --retry-all-errors -fsS -X POST \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${URL}"

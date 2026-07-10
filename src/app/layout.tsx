@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/layout/navbar";
 import { Providers } from "@/components/providers";
-
-const inter = Inter({ subsets: ["latin"] });
+import { BackToTop } from "@/components/ui/back-to-top";
+import { CommandTrigger } from "@/components/ui/command-trigger";
+import { CommandPalette } from "@/components/ui/command-palette";
 
 export const metadata: Metadata = {
-  title: "南大论坛 - NJU Forum",
-  description: "南京大学校园论坛",
+  title: "知南 - NJU Know",
+  description: "南京大学校园知识社区",
 };
 
 export default function RootLayout({
@@ -17,11 +17,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
-      <body className={inter.className}>
+    <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');var r=document.documentElement;if(t==='dark'){r.classList.add('dark');}else if(t==='light'){r.classList.remove('dark');}}catch(e){}})();`,
+          }}
+        />
+      </head>
+      <body>
         <Providers>
           <Navbar />
           <main className="min-h-screen">{children}</main>
+          <BackToTop />
+          <CommandTrigger />
+          <CommandPalette />
         </Providers>
       </body>
     </html>

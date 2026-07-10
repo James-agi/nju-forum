@@ -9,8 +9,12 @@
 # testing
 /coverage
 
+# runtime uploads and feedback materials
+/storage/
+
 # next.js
 /.next/
+/.next-dev/
 /out/
 
 # production
@@ -20,6 +24,12 @@
 .DS_Store
 *.pem
 
+# 上传的静态资源（图片、PDF），线上可能是目录或软链接
+/public/forum-images
+/public/knowledge-images
+/public/pdfs
+/public/avatars
+
 # debug
 *.log
 npm-debug.log*
@@ -28,7 +38,8 @@ yarn-error.log*
 
 # local env files
 .env
-.env*.local
+.env.*
+!.env.example
 
 # vercel
 .vercel
@@ -38,3 +49,72 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# codex runner logs
+.codex-run/
+
+# local card batch secrets
+agent-workflows/card-batch/*.local.json
+
+# 个人材料，与项目无关
+innovative_project_form.md
+innovative_project_form.txt
+
+# 临时调试脚本与产物
+temp-*
+tmp-*
+query-cards.js
+*-diff.txt
+/backup_*.sql
+/backup-*.dump
+*.dump
+postgresql-install.log
+
+# pgvector 源码和压缩包
+pgvector.zip
+pgvector-src/
+
+# prisma 批处理工具与产物（一次性数据迁移脚本，不进版本库）
+prisma/tools/
+
+# AI 工具生成的工程噪音
+artifacts/
+projects/
+tools/
+codex-skills/
+.opencode/
+.claude/
+
+# 一次性脚本 / 临时文件
+__test_write.txt
+PROJECT.pdf
+PROJECT.md
+prisma/seed-posts.ts
+scripts/card-scan.ts
+scripts/debug-*.ts
+scripts/dump-all.ts
+scripts/fix-card.ts
+scripts/migrate-vectors-to-pg.ts
+scripts/quick-verify.ts
+scripts/eval-result.json
+scripts/eval/result.json
+scripts/verify-cards.ts
+scripts/write-ts.py
+scripts/temp-*.js
+
+# 批次运行产物（脚本本身保留，仅忽略 runs 输出）
+agent-workflows/card-batch/runs/
+agent-workflows/card-batch/.xdg-*/
+
+# node -e 误产生的乱名空文件（箭头函数 => 被 bash 当重定向符）
+*disconnect())
+*console.log*
+*includes(*
+
+# fix-cards skill 写库前的整卡备份（随修卡累积，仅本地留存，不入库）
+.agents/skills/fix-cards/backups/
+
+# 本地视觉验收截图
+/card-*.png
+/list-*.png
+/section-*.png

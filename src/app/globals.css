@@ -23,29 +23,37 @@
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
+    --radius: 0rem;
+
+    --status-active: 142 60% 45%;
+    --status-progress: 28 55% 48%;
+    --status-info: 222 55% 52%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 200 24% 8%;
+    --foreground: 205 28% 94%;
+    --card: 202 22% 11%;
+    --card-foreground: 205 28% 94%;
+    --popover: 202 24% 10%;
+    --popover-foreground: 205 28% 94%;
+    --primary: 176 48% 72%;
+    --primary-foreground: 195 34% 9%;
+    --secondary: 202 20% 16%;
+    --secondary-foreground: 205 28% 92%;
+    --muted: 202 18% 15%;
+    --muted-foreground: 205 15% 70%;
+    --accent: 178 28% 22%;
+    --accent-foreground: 190 35% 93%;
+    --destructive: 4 68% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 202 16% 24%;
+    --input: 202 16% 24%;
+    --ring: 176 48% 62%;
+
+    --status-active: 154 58% 52%;
+    --status-progress: 36 72% 58%;
+    --status-info: 196 62% 62%;
   }
 }
 
@@ -55,5 +63,182 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+      "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  }
+  .dark body {
+    background-color: hsl(var(--background));
+    background-image: linear-gradient(
+      180deg,
+      hsl(196 28% 10%) 0%,
+      hsl(var(--background)) 18rem
+    );
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer utilities {
+  .section-label {
+    @apply text-xs font-medium uppercase tracking-[0.3em] text-muted-foreground;
+  }
+  .section-title {
+    @apply mt-4 text-5xl font-bold leading-[0.92] tracking-tight text-foreground md:text-7xl;
+  }
+  .hairline {
+    @apply border-border;
+  }
+  .text-stat {
+    @apply text-4xl font-bold tabular-nums tracking-tight text-foreground md:text-5xl;
+  }
+  .status-dot {
+    @apply inline-block h-1.5 w-1.5 rounded-full;
+  }
+  .status-dot-active {
+    @apply status-dot bg-[hsl(var(--status-active))];
+  }
+  .status-dot-progress {
+    @apply status-dot bg-[hsl(var(--status-progress))];
+  }
+  .status-dot-info {
+    @apply status-dot bg-[hsl(var(--status-info))];
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in {
+    animation: fade-in 0.4s ease-out both;
+  }
+  .animate-fade-in-1 { animation-delay: 0.05s; }
+  .animate-fade-in-2 { animation-delay: 0.1s; }
+  .animate-fade-in-3 { animation-delay: 0.15s; }
+  .animate-fade-in-4 { animation-delay: 0.2s; }
+  .animate-fade-in-5 { animation-delay: 0.25s; }
+
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-slide-up {
+    animation: slide-up 0.5s ease-out both;
+  }
+
+  /* 卡片 hover 取景框角标（左上 + 右下 L 形描线延展） */
+  .frame-card {
+    position: relative;
+  }
+  .frame-card::before,
+  .frame-card::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+    transition: opacity 0.3s ease, width 0.3s ease, height 0.3s ease;
+    pointer-events: none;
+  }
+  .frame-card::before {
+    top: -1px;
+    left: -1px;
+    border-top: 1px solid hsl(var(--foreground));
+    border-left: 1px solid hsl(var(--foreground));
+  }
+  .frame-card::after {
+    right: -1px;
+    bottom: -1px;
+    border-bottom: 1px solid hsl(var(--foreground));
+    border-right: 1px solid hsl(var(--foreground));
+  }
+  .frame-card:hover {
+    border-color: hsl(var(--foreground) / 0.4);
+  }
+  .frame-card:hover::before,
+  .frame-card:hover::after {
+    opacity: 1;
+    width: 22px;
+    height: 22px;
+  }
+
+  /* 列表项交错入场：宿主传入 --index */
+  @keyframes stagger-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-stagger {
+    animation: stagger-up 0.45s ease-out both;
+    animation-delay: calc(var(--index, 0) * 55ms);
+  }
+
+  /* 视图切换：内容区淡入缩放 */
+  @keyframes fade-scale {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-view {
+    animation: fade-scale 0.18s ease-out both;
+  }
+
+  /* 卡片 hover 辉光 */
+  .glow-hover {
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  }
+  .glow-hover:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 22px hsl(var(--foreground) / 0.08);
+  }
+
+  /* 「不思考」卡片入场：只做透明度淡入，不做位移。
+     漂浮/定位全部由 JS 物理场（floating-cards-field.tsx）用 transform 驱动，
+     这里若再加 transform 动画会与 rAF 每帧写入的 transform 打架。
+     淡入还顺带遮住「effect 写首帧 transform 前卡片短暂堆在原点」的闪现。 */
+  @keyframes card-bubble-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .knowledge-card-bubble {
+    animation: card-bubble-in 0.5s ease-out both;
+    animation-delay: calc(var(--bubble-index, 0) * 80ms);
+  }
+}
+
+/* 主题切换整页过渡 */
+html.theme-transition,
+html.theme-transition body,
+html.theme-transition * {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-stagger,
+  .animate-view,
+  .animate-fade-in,
+  .animate-slide-up,
+  .knowledge-card-bubble {
+    animation: none !important;
+  }
+  .glow-hover:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 767px), (prefers-reduced-transparency: reduce) {
+  .backdrop-blur,
+  .backdrop-blur-sm,
+  .backdrop-blur-md,
+  .backdrop-blur-lg,
+  .backdrop-blur-xl {
+    --tw-backdrop-blur: blur(0px) !important;
+    -webkit-backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness)
+      var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale)
+      var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert)
+      var(--tw-backdrop-opacity) var(--tw-backdrop-saturate)
+      var(--tw-backdrop-sepia) !important;
+    backdrop-filter: var(--tw-backdrop-blur) var(--tw-backdrop-brightness)
+      var(--tw-backdrop-contrast) var(--tw-backdrop-grayscale)
+      var(--tw-backdrop-hue-rotate) var(--tw-backdrop-invert)
+      var(--tw-backdrop-opacity) var(--tw-backdrop-saturate)
+      var(--tw-backdrop-sepia) !important;
   }
 }
